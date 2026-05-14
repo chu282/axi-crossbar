@@ -5,9 +5,9 @@ module axi_addr_decoder #(
     parameter ADDR_WIDTH = 32,
     parameter NUM_SLAVES = 2,
     parameter [ADDR_WIDTH-1:0] base_addrs [NUM_SLAVES-1:0],
-    parameter [ADDR_WIDTH-1:0] addr_masks [NUM_SLAVES-1:0],
+    parameter [ADDR_WIDTH-1:0] addr_masks [NUM_SLAVES-1:0]
 ) (
-    input  logic valid
+    input  logic valid,
     input  logic [ADDR_WIDTH-1:0] addr,
     output logic [NUM_SLAVES-1:0] slave_select,
     output logic decerr
