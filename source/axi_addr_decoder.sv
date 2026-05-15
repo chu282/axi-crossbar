@@ -24,4 +24,3 @@ module axi_addr_decoder #(
     end
 
 endmodule
-

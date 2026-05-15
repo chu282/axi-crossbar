@@ -8,8 +8,8 @@ interface #(
 );
 
     // AW Channel
-    logic [ID_WIDTH-1:0] awid;
     logic [ADDR_WIDTH-1:0] awaddr;
+    logic [ID_WIDTH-1:0] awid;
     logic [7:0] awlen;
     logic [2:0] awsize;
     logic [1:0] awburst;
@@ -18,7 +18,8 @@ interface #(
     // W Channel
     logic [DATA_WIDTH-1:0] wdata;
     logic [STRB_WIDTH-1:0] wstrb;
-    logic wvalid, wready, wlast;
+    logic wlast;
+    logic wvalid, wready;
 
     // B Channel
     logic [ID_WIDTH-1:0] bid;
@@ -26,8 +27,8 @@ interface #(
     logic bvalid, bready;
 
     // AR Channel
-    logic [ID_WIDTH-1:0] arid;
     logic [ADDR_WIDTH-1:0] araddr;
+    logic [ID_WIDTH-1:0] arid;
     logic [7:0] arlen;
     logic [2:0] arsize;
     logic [1:0] arburst;
@@ -37,25 +38,26 @@ interface #(
     logic [ID_WIDTH-1:0] rid;
     logic [DATA_WIDTH-1:0] rdata;
     logic [1:0] rresp;
-    logic rvalid, rready, rlast;
+    logic rlast;
+    logic rvalid, rready;
 
     modport master (
         // outputs
-        output awid, awaddr, awlen, awsize, awburst, awvalid,
+        output awaddr, awid, awlen, awsize, awburst, awvalid,
         output wdata, wstrb, wlast, wvalid,
-        output arid, araddr, arlen, arsize, arburst, arvalid,
+        output araddr, arid, arlen, arsize, arburst, arvalid,
         output bready, rready,
         // inputs
         input  awready, wready, arready,
         input  bid, bresp, bvalid,
-        input  rid, rdata, rresp, rvalid, rlast
+        input  rid, rdata, rresp, rlast, rvalid
     );
 
     modport slave (
         // inputs
-        input  awid, awaddr, awlen, awsize, awburst, awvalid,
+        input  awaddr, awid, awlen, awsize, awburst, awvalid,
         input  wdata, wstrb, wlast, wvalid,
-        input  arid, araddr, arlen, arsize, arburst, arvalid,
+        input  araddr, arid, arlen, arsize, arburst, arvalid,
         input  bready, rready,
         // outputs
         output awready, wready, arready,

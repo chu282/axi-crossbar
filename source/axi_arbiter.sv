@@ -1,6 +1,7 @@
 `timescale 1ns / 10ps
 
 module axi_arbiter #(
+    parameter NUM_SLAVES = 2
 ) (
     input  logic clk, n_rst, trans_finished,
     input  logic [1:0] master_req,
@@ -12,7 +13,7 @@ module axi_arbiter #(
     } state_e;
 
     state_e state, next_state;
-    logic [1:0] last_grant, next_last_grant, upper_mask, masked_req;
+    logic [NUM_MASTERS-1:0] last_grant, next_last_grant, upper_mask, masked_req;
 
     always_ff @(posedge clk, negedge n_rst) begin : fsm
         if (~n_rst) begin 

@@ -1,12 +1,12 @@
 `timescale 1ns / 10ps
 
 module skid_buffer #(
-    parameter DATA_WIDTH = 32
+    parameter PAYLOAD_WIDTH = 49
 ) (
-    input logic clk, n_rst, i_valid, i_ready, 
-    input logic [DATA_WIDTH-1:0] i_data,
-    output logic o_valid, o_ready,
-    output logic [DATA_WIDTH-1:0] o_data
+    input logic clk, n_rst, master_valid, slave_ready, 
+    input logic [DATA_WIDTH-1:0] master_data,
+    output logic slave_valid, master_ready,
+    output logic [DATA_WIDTH-1:0] slave_data
 );
 
     typedef enum logic [1:0] {
@@ -25,9 +25,9 @@ module skid_buffer #(
         end
         else begin
             if (state != SKID && next_state == BUSY)
-                main_reg <= i_data;
+                main_reg <= master_data;
             if (next_state == SKID)
-                skid_reg <= i_data;
+                skid_reg <= master_data;
             if (state == SKID && next_state == BUSY)
                 main_reg <= skid_reg;
             state <= next_state;
@@ -38,26 +38,25 @@ module skid_buffer #(
         next_state = state;
         case (state)
             IDLE: begin
-                if (i_valid)
+                if (master_valid)
                     next_state = BUSY;
             end
             BUSY: begin 
-                if (i_valid && ~i_ready) // new piece of data, slave cannot accept
+                if (master_valid && ~slave_ready) // new piece of data, slave cannot accept
                     next_state = SKID;
-                else if (~i_valid && i_ready) // slave accepted data, master doesn't send new data; all data accounted for 
+                else if (~master_valid && slave_ready) // slave accepted data, master doesn't send new data; all data accounted for 
                     next_state = IDLE;
             end
             SKID: begin 
-                if (i_ready) // slave accepts 1/2 items stored 
+                if (slave_ready) // slave accepts 1/2 items stored 
                     next_state = BUSY;
             end
             default: next_state = IDLE;
         endcase
     end
 
-    assign o_data = main_reg;
-    assign o_ready = state == IDLE || state == BUSY;
-    assign o_valid = state == BUSY || state == SKID;
+    assign slave_data = main_reg;
+    assign master_ready = state == IDLE || state == BUSY;
+    assign slave_valid = state == BUSY || state == SKID;
 
 endmodule
-
