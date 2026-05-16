@@ -1,11 +1,11 @@
 `timescale 1ns / 10ps
 
 module axi_arbiter #(
-    parameter NUM_SLAVES = 2
+    parameter NUM_MASTERS = 2
 ) (
     input  logic clk, n_rst, trans_finished,
-    input  logic [1:0] master_req,
-    output logic [1:0] grant
+    input  logic [NUM_MASTERS-1:0] master_req,
+    output logic [NUM_MASTERS-1:0] grant
 );
 
     typedef enum logic { 

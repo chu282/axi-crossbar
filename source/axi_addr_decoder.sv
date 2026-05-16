@@ -16,6 +16,9 @@ module axi_addr_decoder #(
     always_comb begin
         slave_select = 0;
         for (int i = 0; i < NUM_SLAVES; i++) begin
+            // Mask represents fixed bits in the address. 
+            // If the current addr doesn't have the exact same bits in that location, 
+            // then it isn't in the current slave.
             if (valid && (addr & addr_masks[i]) == base_addrs[i]) slave_select[i] = 1;
         end
 
