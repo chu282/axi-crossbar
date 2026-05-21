@@ -1,9 +1,9 @@
-interface #(
+interface axi_if #(
     parameter ADDR_WIDTH = 32,
     parameter DATA_WIDTH = 32,
     parameter ID_WIDTH = 4,
     parameter STRB_WIDTH = (DATA_WIDTH/8)
-) axi_if (
+) (
     input logic clk, n_rst
 );
 

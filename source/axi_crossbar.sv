@@ -166,7 +166,6 @@ module axi_crossbar #(
     endgenerate
 
     // Reverse path
-    genvar m_idx, s_idx;
     generate
         // Slave side
         for (s_idx = 0; s_idx < NUM_SLAVES; s_idx++) begin
@@ -223,13 +222,14 @@ module axi_crossbar #(
     logic [NUM_MASTERS-1:0] aw_decerr;
     logic [NUM_MASTERS-1:0] ar_decerr;
 
-    genvar m_idx;
     generate
         for (m_idx = 0; m_idx < NUM_MASTERS; m_idx++) begin
             // AW Channel
             axi_addr_decoder #(
+                .ADDR_WIDTH(ADDR_WIDTH),
+                .NUM_SLAVES(NUM_SLAVES),
                 .base_addrs(SLAVE_BASE_ADDR),
-                .addr_masks(SLAVE_ADDR_MASK), .*
+                .addr_masks(SLAVE_ADDR_MASK)
             ) aw_ad (
                 .valid(aw_m_valid_skid[m_idx]),
                 .addr(aw_m_addr_skid[m_idx]), 
@@ -239,8 +239,10 @@ module axi_crossbar #(
 
             // AR Channel
             axi_addr_decoder #(
+                .ADDR_WIDTH(ADDR_WIDTH),
+                .NUM_SLAVES(NUM_SLAVES),
                 .base_addrs(SLAVE_BASE_ADDR),
-                .addr_masks(SLAVE_ADDR_MASK), .*
+                .addr_masks(SLAVE_ADDR_MASK)
             ) ar_ad (
                 .valid(ar_m_valid_skid[m_idx]),
                 .addr(ar_m_addr_skid[m_idx]), 
@@ -286,7 +288,6 @@ module axi_crossbar #(
     logic [NUM_SLAVES-1:0] r_grant [NUM_MASTERS-1:0];
 
     // Forward path
-    genvar s_idx, m_idx;
     generate
         for (s_idx = 0; s_idx < NUM_SLAVES; s_idx++) begin
             /* 
@@ -493,7 +494,8 @@ module axi_crossbar #(
         for (s_idx = 0; s_idx < NUM_SLAVES; s_idx++) begin
             // W Channel
             axi_grant_tracker #(
-                .FIFO_DEPTH(MAX_OUTSTANDING_TX), .*
+                .FIFO_DEPTH(MAX_OUTSTANDING_TX),
+                .NUM_MASTERS(NUM_MASTERS)
             ) w_gt (
                 .new_tx(aw_tx_started[s_idx]), 
                 .tf_finished(w_s_tf_finished[s_idx]),
@@ -504,7 +506,8 @@ module axi_crossbar #(
 
             // B Channel
             axi_grant_tracker #(
-                .FIFO_DEPTH(MAX_OUTSTANDING_TX), .*
+                .FIFO_DEPTH(MAX_OUTSTANDING_TX),
+                .NUM_MASTERS(NUM_MASTERS)
             ) b_gt (
                 .new_tx(aw_tx_started[s_idx]), 
                 .tf_finished(b_s_tf_finished[s_idx]),
@@ -515,7 +518,8 @@ module axi_crossbar #(
 
             // R Channel
             axi_grant_tracker #(
-                .FIFO_DEPTH(MAX_OUTSTANDING_TX), .*
+                .FIFO_DEPTH(MAX_OUTSTANDING_TX),
+                .NUM_MASTERS(NUM_MASTERS)
             ) r_gt (
                 .new_tx(ar_tx_started[s_idx]), 
                 .tf_finished(r_s_tf_finished[s_idx]),
