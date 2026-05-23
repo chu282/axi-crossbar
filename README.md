@@ -14,7 +14,7 @@ This project implements an in-order AXI4-Crossbar in SystemVerilog using **FuseS
 ### Port List
 The top-level module [axi_crossbar.sv](file:///c:/Users/dylan/Documents/vscode/axi-crossbar/source/axi_crossbar.sv) has the following ports:
 * `clk`: System clock.
-* `n_rst`: Active-low synchronous reset.
+* `n_rst`: Active-low asynchronous reset.
 * `m`: Array of AXI interfaces configured as slaves (`axi_if.slave`), representing connections to Masters.
 * `s`: Array of AXI interfaces configured as masters (`axi_if.master`), representing connections to Slaves.
 

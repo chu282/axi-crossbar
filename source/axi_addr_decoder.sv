@@ -4,8 +4,8 @@ module axi_addr_decoder #(
     // parameters
     parameter ADDR_WIDTH = 32,
     parameter NUM_SLAVES = 2,
-    parameter [ADDR_WIDTH-1:0] base_addrs [NUM_SLAVES-1:0],
-    parameter [ADDR_WIDTH-1:0] addr_masks [NUM_SLAVES-1:0]
+    parameter [ADDR_WIDTH-1:0] BASE_ADDRS [NUM_SLAVES-1:0],
+    parameter [ADDR_WIDTH-1:0] ADDR_MASKS [NUM_SLAVES-1:0]
 ) (
     input  logic valid,
     input  logic [ADDR_WIDTH-1:0] addr,
@@ -19,7 +19,7 @@ module axi_addr_decoder #(
             // Mask represents fixed bits in the address. 
             // If the current addr doesn't have the exact same bits in that location, 
             // then it isn't in the current slave.
-            if (valid && (addr & addr_masks[i]) == base_addrs[i]) slave_select[i] = 1;
+            if (valid && (addr & ADDR_MASKS[i]) == BASE_ADDRS[i]) slave_select[i] = 1;
         end
 
         if (valid && slave_select == 0) decerr = 1;

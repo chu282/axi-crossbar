@@ -228,8 +228,8 @@ module axi_crossbar #(
             axi_addr_decoder #(
                 .ADDR_WIDTH(ADDR_WIDTH),
                 .NUM_SLAVES(NUM_SLAVES),
-                .base_addrs(SLAVE_BASE_ADDR),
-                .addr_masks(SLAVE_ADDR_MASK)
+                .BASE_ADDRS(SLAVE_BASE_ADDR),
+                .ADDR_MASKS(SLAVE_ADDR_MASK)
             ) aw_ad (
                 .valid(aw_m_valid_skid[m_idx]),
                 .addr(aw_m_addr_skid[m_idx]), 
@@ -241,8 +241,8 @@ module axi_crossbar #(
             axi_addr_decoder #(
                 .ADDR_WIDTH(ADDR_WIDTH),
                 .NUM_SLAVES(NUM_SLAVES),
-                .base_addrs(SLAVE_BASE_ADDR),
-                .addr_masks(SLAVE_ADDR_MASK)
+                .BASE_ADDRS(SLAVE_BASE_ADDR),
+                .ADDR_MASKS(SLAVE_ADDR_MASK)
             ) ar_ad (
                 .valid(ar_m_valid_skid[m_idx]),
                 .addr(ar_m_addr_skid[m_idx]), 
