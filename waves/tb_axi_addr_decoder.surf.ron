@@ -62,28 +62,6 @@
             ],
         ),
         displayed_items: {
-            (6): Variable((
-                variable_ref: (
-                    path: (
-                        strs: [
-                            "axi_addr_decoder_wrapper",
-                        ],
-                        id: Wellen((3)),
-                    ),
-                    name: "valid",
-                    id: Wellen((7)),
-                    index: None,
-                ),
-                color: None,
-                background_color: None,
-                display_name: "valid",
-                display_name_type: Unique,
-                manual_name: None,
-                format: None,
-                field_formats: [],
-                height_scaling_factor: None,
-                analog: None,
-            )),
             (5): Variable((
                 variable_ref: (
                     path: (
@@ -106,7 +84,7 @@
                 height_scaling_factor: None,
                 analog: None,
             )),
-            (3): Variable((
+            (6): Variable((
                 variable_ref: (
                     path: (
                         strs: [
@@ -114,13 +92,13 @@
                         ],
                         id: Wellen((3)),
                     ),
-                    name: "addr",
-                    id: Wellen((8)),
+                    name: "valid",
+                    id: Wellen((7)),
                     index: None,
                 ),
                 color: None,
                 background_color: None,
-                display_name: "addr [15:0]",
+                display_name: "valid",
                 display_name_type: Unique,
                 manual_name: None,
                 format: None,
@@ -150,6 +128,28 @@
                 height_scaling_factor: None,
                 analog: None,
             )),
+            (3): Variable((
+                variable_ref: (
+                    path: (
+                        strs: [
+                            "axi_addr_decoder_wrapper",
+                        ],
+                        id: Wellen((3)),
+                    ),
+                    name: "addr",
+                    id: Wellen((8)),
+                    index: None,
+                ),
+                color: None,
+                background_color: None,
+                display_name: "addr [15:0]",
+                display_name_type: Unique,
+                manual_name: None,
+                format: None,
+                field_formats: [],
+                height_scaling_factor: None,
+                analog: None,
+            )),
         },
         display_item_ref_counter: 6,
         viewports: [
@@ -168,13 +168,7 @@
         markers: {},
         selected_annotation: None,
         annotations: [],
-        annotation_groups: [
-            (
-                name: "Ungrouped",
-                cycle_counter: 0,
-                annotations: [],
-            ),
-        ],
+        annotation_groups: [],
         annotation_list_visible: false,
         annotation_counter: 0,
         last_active_viewport_idx: 0,
@@ -211,7 +205,7 @@
         "cb_bits": 8,
         "cr_bits": 8,
     },
-    wanted_timeunit: PicoSeconds,
+    wanted_timeunit: NanoSeconds,
     time_string_format: None,
     show_url_entry: false,
     variable_name_filter_focused: false,

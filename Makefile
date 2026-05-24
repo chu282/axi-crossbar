@@ -19,14 +19,14 @@ VERILOG_SOURCES += $(filter-out %_wrapper.sv, $(wildcard $(PWD)/source/*.sv))
 VERILOG_SOURCES += $(PWD)/tb_wrappers/$(TOPLEVEL).sv
 
 EXTRA_ARGS += -Wall --trace --trace-structs
+SIM_BUILD = sim_builds/$(subst _wrapper,,$(TOPLEVEL))
 
 include $(shell cocotb-config --makefiles)/Makefile.sim
 
 view:
-# 	surfer $(COCOTB_WAVES_FILE) --state-file waves/$(COCOTB_TEST_MODULES).surf.ron > /dev/null 2>&1 &
-	surfer $(COCOTB_WAVES_FILE) --state-file waves/$(COCOTB_TEST_MODULES).surf.ron
+	surfer $(COCOTB_WAVES_FILE) --state-file waves/$(COCOTB_TEST_MODULES).surf.ron > /dev/null 2>&1 &
 
-sim_%:
+%_sim:
 	$(MAKE) sim TOPLEVEL=$* ; \
 	RET=$$? ; \
 	if [ -f dump.vcd ]; then \
@@ -34,5 +34,14 @@ sim_%:
 	fi ; \
 	exit $$RET
 
-view_%:
+%_view:
 	$(MAKE) view TOPLEVEL=$*
+
+%_run:
+	$(MAKE) $*_sim ; \
+	RET=$$? ; \
+	$(MAKE) $*_view ; \
+	exit $$RET
+
+clean::
+	rm -rf sim_builds

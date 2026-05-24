@@ -8,7 +8,7 @@ from cocotb.triggers import Timer
 async def test_axi_mux(dut):
     PAYLOAD_WIDTH = int(dut.PAYLOAD_WIDTH.value)
     NUM_DEVICES = int(dut.NUM_DEVICES.value)
-    
+        
     for grant in [0b00, 0b10, 0b01]:
         dut.grant.value = grant
         for src_valid in range(0b100):
