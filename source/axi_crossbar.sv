@@ -99,7 +99,7 @@ module axi_crossbar #(
         // Master side
         for (m_idx = 0; m_idx < NUM_MASTERS; m_idx++) begin
             // AW Channel
-            skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_AW)) sb_aw_master (
+            axi_skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_AW)) sb_aw_master (
                 .src_valid(m[m_idx].awvalid), 
                 .dst_valid(aw_m_valid_skid[m_idx]), 
                 .src_ready(m[m_idx].awready), 
@@ -110,7 +110,7 @@ module axi_crossbar #(
             assign aw_m_addr_skid[m_idx] = aw_m_payload_skid[m_idx][PAYLOAD_WIDTH_AW-1:PAYLOAD_WIDTH_AW-ADDR_WIDTH];
 
             // W Channel
-            skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_W)) sb_w_master (
+            axi_skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_W)) sb_w_master (
                 .src_valid(m[m_idx].wvalid), 
                 .dst_valid(w_m_valid_skid[m_idx]), 
                 .src_ready(m[m_idx].wready), 
@@ -120,7 +120,7 @@ module axi_crossbar #(
                 );
 
             // AR Channel
-            skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_AR)) sb_ar_master (
+            axi_skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_AR)) sb_ar_master (
                 .src_valid(m[m_idx].arvalid), 
                 .dst_valid(ar_m_valid_skid[m_idx]), 
                 .src_ready(m[m_idx].arready), 
@@ -134,7 +134,7 @@ module axi_crossbar #(
         // Slave side
         for (s_idx = 0; s_idx < NUM_SLAVES; s_idx++) begin
             // AW Channel
-            skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_AW)) sb_aw_slave (
+            axi_skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_AW)) sb_aw_slave (
                 .src_valid(aw_s_valid_mux[s_idx]), 
                 .dst_valid(s[s_idx].awvalid), 
                 .src_ready(aw_s_ready_mux[s_idx]), 
@@ -144,7 +144,7 @@ module axi_crossbar #(
                 );
 
             // W Channel
-            skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_W)) sb_w_slave (
+            axi_skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_W)) sb_w_slave (
                 .src_valid(w_s_valid_mux[s_idx]), 
                 .dst_valid(s[s_idx].wvalid), 
                 .src_ready(w_s_ready_mux[s_idx]), 
@@ -154,7 +154,7 @@ module axi_crossbar #(
                 );
 
             // AR Channel
-            skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_AR)) sb_ar_slave (
+            axi_skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_AR)) sb_ar_slave (
                 .src_valid(ar_s_valid_mux[s_idx]), 
                 .dst_valid(s[s_idx].arvalid), 
                 .src_ready(ar_s_ready_mux[s_idx]), 
@@ -170,7 +170,7 @@ module axi_crossbar #(
         // Slave side
         for (s_idx = 0; s_idx < NUM_SLAVES; s_idx++) begin
             // B Channel
-            skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_B)) sb_b_slave (
+            axi_skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_B)) sb_b_slave (
                 .src_valid(s[s_idx].bvalid), 
                 .dst_valid(b_s_valid_skid[s_idx]), 
                 .src_ready(s[s_idx].bready), 
@@ -181,7 +181,7 @@ module axi_crossbar #(
             assign b_s_id_skid[s_idx] = b_s_payload_skid[s_idx][PAYLOAD_WIDTH_B-1:PAYLOAD_WIDTH_B-ID_WIDTH];
 
             // R Channel
-            skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_R)) sb_r_slave (
+            axi_skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_R)) sb_r_slave (
                 .src_valid(s[s_idx].rvalid), 
                 .dst_valid(r_s_valid_skid[s_idx]), 
                 .src_ready(s[s_idx].rready), 
@@ -195,7 +195,7 @@ module axi_crossbar #(
         // Master side
         for (m_idx = 0; m_idx < NUM_MASTERS; m_idx++) begin
             // B Channel
-            skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_B)) sb_b_master (
+            axi_skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_B)) sb_b_master (
                 .src_valid(b_m_valid_mux[m_idx]), 
                 .dst_valid(m[m_idx].bvalid), 
                 .src_ready(b_m_ready_mux[m_idx]), 
@@ -205,7 +205,7 @@ module axi_crossbar #(
                 );
 
             // R Channel
-            skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_R)) sb_r_master (
+            axi_skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_R)) sb_r_master (
                 .src_valid(r_m_valid_mux[m_idx]), 
                 .dst_valid(m[m_idx].rvalid), 
                 .src_ready(r_m_ready_mux[m_idx]), 

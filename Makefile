@@ -12,13 +12,13 @@ endif
 COCOTB_TEST_MODULES ?= tb_$(subst _wrapper,,$(TOPLEVEL))
 
 export PYTHONPATH := $(PWD)/testbench:$(PYTHONPATH)
-export COCOTB_WAVES_FILE = waves/vcd/$(COCOTB_TEST_MODULES).vcd
+export COCOTB_WAVES_FILE = waves/fst/$(COCOTB_TEST_MODULES).fst
 export COCOTB_WAVES ?= 1
 
 VERILOG_SOURCES += $(filter-out %_wrapper.sv, $(wildcard $(PWD)/source/*.sv))
 VERILOG_SOURCES += $(PWD)/tb_wrappers/$(TOPLEVEL).sv
 
-EXTRA_ARGS += -Wall --trace --trace-structs
+EXTRA_ARGS += -Wall --trace --trace-fst --trace-structs
 SIM_BUILD = sim_builds/$(subst _wrapper,,$(TOPLEVEL))
 
 include $(shell cocotb-config --makefiles)/Makefile.sim
@@ -29,8 +29,8 @@ view:
 %_sim:
 	$(MAKE) sim TOPLEVEL=$* ; \
 	RET=$$? ; \
-	if [ -f dump.vcd ]; then \
-		mv dump.vcd waves/vcd/tb_$*.vcd ; \
+	if [ -f dump.fst ]; then \
+		mv dump.fst waves/fst/tb_$*.fst ; \
 	fi ; \
 	exit $$RET
 

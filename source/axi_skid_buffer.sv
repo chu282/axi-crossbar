@@ -1,6 +1,6 @@
 `timescale 1ns / 10ps
 
-module skid_buffer #(
+module axi_skid_buffer #(
     parameter PAYLOAD_WIDTH = 49
 ) (
     input logic clk, n_rst, src_valid, dst_ready, 
@@ -26,7 +26,7 @@ module skid_buffer #(
         else begin
             if (state != SKID && next_state == BUSY)
                 main_reg <= src_payload;
-            if (next_state == SKID)
+            if (state != SKID && next_state == SKID)
                 skid_reg <= src_payload;
             if (state == SKID && next_state == BUSY)
                 main_reg <= skid_reg;
@@ -56,7 +56,7 @@ module skid_buffer #(
     end
 
     assign dst_payload = main_reg;
-    assign src_ready = state == IDLE || state == BUSY;
-    assign dst_valid = state == BUSY || state == SKID;
+    assign src_ready = state == IDLE || state == BUSY; // if 0 or 1 pieces of data held, we can still accept another
+    assign dst_valid = state == BUSY || state == SKID; // if any data held in buffer, it is valid for the slave to accept
 
 endmodule
