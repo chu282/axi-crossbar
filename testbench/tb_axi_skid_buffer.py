@@ -23,9 +23,9 @@ async def test_axi_skid_buffer(dut):
     data_array = [0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF]
     dut.src_valid.value = 1
     dut.dst_ready.value = 1
+
     for data in data_array:
         dut.src_payload.value = data
-
         await FallingEdge(clk)
         assert dut.src_ready.value == 1
         assert dut.dst_valid.value == 1
@@ -62,9 +62,9 @@ async def test_axi_skid_buffer(dut):
     dut.src_valid.value = 1
     dut.dst_ready.value = 1
     data_array = [0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF]
+
     for data in data_array:
         dut.src_payload.value = data
-
         await FallingEdge(clk)
         assert dut.src_ready.value == 1
         assert dut.dst_valid.value == 1
@@ -75,6 +75,7 @@ async def test_axi_skid_buffer(dut):
     dut.n_rst.value = 0
     dut.src_valid.value = 0
     dut.dst_ready.value = 0
+
     await FallingEdge(clk)
     dut.n_rst.value = 1
     assert dut.src_ready.value == 1
@@ -96,7 +97,7 @@ async def test_axi_skid_buffer(dut):
     # Ready is pulled low
     dut.dst_ready.value = 0
     dut.src_payload.value = 0xBC
-    
+
     await FallingEdge(clk)
     assert dut.src_ready.value == 0
     assert dut.dst_valid.value == 1
@@ -110,6 +111,7 @@ async def test_axi_skid_buffer(dut):
     assert dut.src_ready.value == 1
     assert dut.dst_valid.value == 1
     assert dut.dst_payload.value == 0xBC
+    
     await FallingEdge(clk)
     assert dut.src_ready.value == 1
     assert dut.dst_valid.value == 1

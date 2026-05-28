@@ -27,7 +27,7 @@ view:
 	surfer $(COCOTB_WAVES_FILE) --state-file waves/$(COCOTB_TEST_MODULES).surf.ron > /dev/null 2>&1 &
 
 %_sim:
-	$(MAKE) sim TOPLEVEL=$* ; \
+	@$(MAKE) sim TOPLEVEL=$* ; \
 	RET=$$? ; \
 	if [ -f dump.fst ]; then \
 		mv dump.fst waves/fst/tb_$*.fst ; \
@@ -35,10 +35,10 @@ view:
 	exit $$RET
 
 %_view:
-	$(MAKE) view TOPLEVEL=$*
+	@$(MAKE) view TOPLEVEL=$*
 
 %_run:
-	$(MAKE) $*_sim ; \
+	@$(MAKE) $*_sim ; \
 	RET=$$? ; \
 	$(MAKE) $*_view ; \
 	exit $$RET
