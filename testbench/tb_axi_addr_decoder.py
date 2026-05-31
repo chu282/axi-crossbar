@@ -18,11 +18,11 @@ async def test_axi_addr_decoder(dut):
 
             await Timer(1, unit="ns")
             exp_slave_select = 0
-            if (valid):
+            if valid:
                 for i in range(NUM_SLAVES):
                     base_addr = base_addrs[i]
                     addr_mask = addr_masks[i]
-                    if ((addr & addr_mask) == base_addr):
+                    if (addr & addr_mask) == base_addr:
                         exp_slave_select = 1 << i
 
             assert int(dut.slave_select.value) == exp_slave_select, \

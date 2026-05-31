@@ -21,7 +21,7 @@ async def test_axi_mux(dut):
                 await Timer(1, unit="ns")
 
                 assert dut.dst_valid.value == ((src_valid & grant) != 0)
-                if (grant == 0):
+                if grant == 0:
                     assert dut.dst_payload.value == 0
                 else:
                     idx = math.ceil(math.log2(grant))

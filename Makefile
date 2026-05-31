@@ -24,7 +24,9 @@ SIM_BUILD = sim_builds/$(subst _wrapper,,$(TOPLEVEL))
 include $(shell cocotb-config --makefiles)/Makefile.sim
 
 view:
-	surfer $(COCOTB_WAVES_FILE) --state-file waves/$(COCOTB_TEST_MODULES).surf.ron > /dev/null 2>&1 &
+	-@pkill -9 -f "[s]urfer.*$(COCOTB_WAVES_FILE)" > /dev/null 2>&1 || true
+	-@powershell.exe -Command "Get-CimInstance Win32_Process -Filter \"Name = 'surfer.exe'\" | Where-Object { \$$_.CommandLine -like '*$(COCOTB_TEST_MODULES)*' } | ForEach-Object { Stop-Process -Id \$$_.ProcessId -Force -ErrorAction SilentlyContinue }" > /dev/null 2>&1 || true
+	@surfer $(COCOTB_WAVES_FILE) --state-file waves/$(COCOTB_TEST_MODULES).surf.ron > /dev/null 2>&1 &
 
 %_sim:
 	@$(MAKE) sim TOPLEVEL=$* ; \

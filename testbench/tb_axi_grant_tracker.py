@@ -65,11 +65,11 @@ async def test_axi_grant_tracker(dut):
         new_tx.value = new_tx_vals[i]
         tf_finished.value = tf_finished_vals[i]
         
-        if (tf_finished_vals[i] == 1 and len(exp_fifo) != 0):
+        if tf_finished_vals[i] == 1 and len(exp_fifo) != 0:
             exp_fifo.pop(0)
-        if (new_tx_vals[i] == 1):
+        if new_tx_vals[i] == 1:
             exp_fifo.append(i_grant_vals[i])
-        if (len(exp_fifo) == 0):
+        if len(exp_fifo) == 0:
             exp_o_grant = 0
         else:
             exp_o_grant = exp_fifo[0]
