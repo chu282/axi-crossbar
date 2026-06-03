@@ -12,8 +12,8 @@ module axi_crossbar #(
     input  logic clk, n_rst,
 
     // interface acts as a master to the slaves, and as a slave to the masters
-    axi_if.master s [NUM_SLAVES],
-    axi_if.slave m [NUM_MASTERS]
+    axi_if.master s [NUM_SLAVES-1:0],
+    axi_if.slave m [NUM_MASTERS-1:0]
 );
 
     // widths
@@ -86,7 +86,7 @@ module axi_crossbar #(
 
     // Slave Addresses
     localparam [ADDR_WIDTH-1:0] SLAVE_BASE_ADDR [NUM_SLAVES-1:0] = '{
-        32'h00000000, 32'h80000000
+        32'h80000000, 32'h00000000
     };
     localparam [ADDR_WIDTH-1:0] SLAVE_ADDR_MASK [NUM_SLAVES-1:0] = '{
         32'h80000000, 32'h80000000
@@ -360,16 +360,13 @@ module axi_crossbar #(
     logic [NUM_SLAVES-1:0] r_s_last_skid;
 
     always_comb begin : trans_start_end_logic
-        for (int s_idx = 0; s_idx < NUM_SLAVES; s_idx++) begin
-            w_s_last_mux[s_idx] = w_s_payload_mux[s_idx][0];
-            r_s_last_skid[s_idx] = r_s_payload_skid[s_idx][0];
+        for (int slave = 0; slave < NUM_SLAVES; slave++) begin
+            w_s_last_mux[slave] = w_s_payload_mux[slave][0];
+            r_s_last_skid[slave] = r_s_payload_skid[slave][0];
         end
-        for (int m_idx = 0; m_idx < NUM_MASTERS; m_idx++) begin
-            r_m_last_mux[m_idx] = r_m_payload_mux[m_idx][0];
+        for (int master = 0; master < NUM_MASTERS; master++) begin
+            r_m_last_mux[master] = r_m_payload_mux[master][0];
         end
-
-        aw_tx_started = aw_s_tf_finished;
-        ar_tx_started = ar_s_tf_finished;
 
         b_s_tf_finished = b_s_valid_skid & b_s_ready_skid;
         r_s_tf_finished = r_s_valid_skid & r_s_ready_skid & r_s_last_skid;
@@ -380,6 +377,9 @@ module axi_crossbar #(
 
         b_m_tf_finished = b_m_valid_mux & b_m_ready_mux;
         r_m_tf_finished = r_m_valid_mux & r_m_ready_mux & r_m_last_mux;
+
+        aw_tx_started = aw_s_tf_finished;
+        ar_tx_started = ar_s_tf_finished;
     end
 
     // ========== MUXES ========== //
