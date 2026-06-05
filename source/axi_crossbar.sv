@@ -446,7 +446,7 @@ module axi_crossbar #(
                 .dst_valid(b_m_valid_mux[m_idx]),
                 .dst_ready(b_m_ready_mux[m_idx]),
                 .src_ready(b_ready_mux[m_idx]),
-                .grant(b_grant[m_idx]),
+                .grant(b_grant[m_idx] & b_slave_req[m_idx]), // fix for two cycle request signals on single transactions
                 .src_payload(b_s_payload_skid),
                 .dst_payload(b_m_payload_mux[m_idx])
             );
@@ -460,7 +460,7 @@ module axi_crossbar #(
                 .dst_valid(r_m_valid_mux[m_idx]),
                 .dst_ready(r_m_ready_mux[m_idx]),
                 .src_ready(r_ready_mux[m_idx]),
-                .grant(r_grant[m_idx]),
+                .grant(r_grant[m_idx] & r_slave_req[m_idx]), // fix for two cycle request signals on single transactions
                 .src_payload(r_s_payload_skid),
                 .dst_payload(r_m_payload_mux[m_idx])
             );

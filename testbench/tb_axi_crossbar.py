@@ -60,7 +60,7 @@ def get_rand_parameters(NUM_TESTS):
 
     for _ in range(NUM_TESTS):
         size = random.choice([0, 1, 2]) # bytes in beat = size^2
-        length = (2**size) * random.randint(1, 16) # number of beats
+        length = (2**size) * random.randint(1, 16) # number of bytes
         addr = length * random.randint(0, 2**ADDR_WIDTH // length - 1)
         val = random.randbytes(length)
 
@@ -72,7 +72,7 @@ def get_rand_parameters(NUM_TESTS):
     return addrs, lengths, data, sizes
 
 @cocotb.test(timeout_time=1, timeout_unit="ms")
-async def test_single_transaction(dut):
+async def test_single_write(dut):
     NUM_TESTS = 1000
 
     tb = TB(dut)
@@ -101,7 +101,14 @@ async def test_single_transaction(dut):
                 assert tb.s0.read(addr, length) == b'\xaa' * length
                 assert tb.s1.read(addr, length) == val
 
+@cocotb.test(timeout_time=1, timeout_unit="ms")
+async def test_single_read(dut):
+    NUM_TESTS = 1000
+
+    tb = TB(dut)
     await tb.reset()
+
+    addrs, lengths, data, sizes = get_rand_parameters(NUM_TESTS)
 
     # read tests
     dut._log.info("---- Single transaction read tests ----")
@@ -122,9 +129,9 @@ async def test_single_transaction(dut):
             else: # slave 1
                 assert read_data.data == tb.s1.read(addr, length)
 
-@cocotb.test(timeout_time=1, timeout_unit="ms")
-async def test_multiple_transactions(dut):
-    NUM_TESTS = 1000
+@cocotb.test()
+async def test_multiple_non_conflicting_transactions(dut):
+    NUM_TESTS = 10000
 
     tb = TB(dut)
     await tb.reset()
@@ -152,7 +159,7 @@ async def test_multiple_transactions(dut):
         random.shuffle(m_indices)
         random.shuffle(s_indices)
 
-        combinations = zip(m_indices, s_indices)
+        combinations = list(zip(m_indices, s_indices))
 
         # queue all transactions for a combination at the same time
         for m_idx, s_idx in combinations:
@@ -172,34 +179,58 @@ async def test_multiple_transactions(dut):
         for m_idx, s_idx in combinations:
             addr = slave_addrs[s_idx][i]
             if s_idx == 0:
-                assert tb.s0.read(addr, length) == s0_val
+                assert tb.s0.read(addr, length) == s_val[0]
             else:
-                assert tb.s1.read(addr, length) == s1_val
-    
+                assert tb.s1.read(addr, length) == s_val[1]
+
+@cocotb.test()
+async def test_multiple_conflicting_transactions(dut):
+    NUM_TESTS = 10000
+
+    tb = TB(dut)
+    await tb.reset()
+
+    addrs, lengths, s0_data, sizes = get_rand_parameters(NUM_TESTS)
+    s1_data = [random.randbytes(length) for length in lengths]
+
+    s0_addrs = [addr // 2 for addr in addrs]
+    s1_addrs = [addr // 2 + 0x8000_0000 for addr in addrs]
+
+    slave_addrs = [s0_addrs, s1_addrs]
+
     dut._log.info("---- Multiple (conflicting) transaction tests ----")
     for i in range(NUM_TESTS):
-        combinations = []
         events = []
 
-        s_val = [s0_data[i], s1_data[i]]
         length = lengths[i]
         size = sizes[i]
 
-        for s_idx in range(NUM_SLAVES):
-            for m in tb.masters:
-                tb.s0.write(addr, b'\xaa' * length)
-                tb.s1.write(addr, b'\xbb' * length)
+        for s_idx, s in enumerate(tb.slaves):
+            # generate random, different addresses that the masters will write to 
+            addr_1 = random.choice(slave_addrs[s_idx])
+            addr_2 = random.choice(slave_addrs[s_idx])
 
-                event = m.init_write(addr, s_val[s_idx], size=size)
+            while not((addr_2 < addr_1 and addr_2 + length*8 < addr_1) or (addr_2 > addr_1 + length*8)):
+                addr_2 = random.choice(slave_addrs[s_idx])
+
+            val_1 = random.randbytes(length)
+            val_2 = random.randbytes(length)
+
+            tx_addrs = [addr_1, addr_2]
+            vals = [val_1, val_2]
+
+            s.write(addr_1, val_1)
+            s.write(addr_2, val_2)
+        
+            for m_idx, m in enumerate(tb.masters):
+                event = m.init_write(tx_addrs[m_idx], vals[m_idx], size=size)
                 events.append(event)
-
-            # wait for transactions to complete
+                
             for event in events:
                 await event.wait()
-                
-            for m_idx, s_idx in combinations:
-                addr = slave_addrs[s_idx][i]
-                if s_idx == 0:
-                    assert tb.s0.read(addr, length) == s0_val
-                else:
-                    assert tb.s1.read(addr, length) == s1_val
+
+            assert s.read(addr_1, length) == val_1
+            assert s.read(addr_2, length) == val_2
+
+@cocotb.test()
+async def test_

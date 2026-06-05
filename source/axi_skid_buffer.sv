@@ -13,7 +13,7 @@ module axi_skid_buffer #(
         IDLE, BUSY, SKID
     } state_e;
 
-    logic [PAYLOAD_WIDTH-1:0] main_reg, skid_reg;
+    logic [PAYLOAD_WIDTH-1:0] main_reg, skid_reg, next_main_reg, next_skid_reg;
 
     state_e state, next_state;
 
@@ -24,12 +24,8 @@ module axi_skid_buffer #(
             state <= IDLE;
         end
         else begin
-            if (state != SKID && next_state == BUSY)
-                main_reg <= src_payload;
-            if (state != SKID && next_state == SKID)
-                skid_reg <= src_payload;
-            if (state == SKID && next_state == BUSY)
-                main_reg <= skid_reg;
+            main_reg <= next_main_reg;
+            skid_reg <= next_skid_reg;
             state <= next_state;
         end
     end
@@ -53,6 +49,18 @@ module axi_skid_buffer #(
             end
             default: next_state = IDLE;
         endcase
+    end
+
+    always_comb begin : reg_logic
+        next_main_reg = main_reg;
+        next_skid_reg = skid_reg;
+
+        if (src_valid && state != SKID && next_state != SKID) // load main if not skidding, and not loading skid
+            next_main_reg = src_payload;
+        if (state == BUSY && next_state == SKID) // load skid
+            next_skid_reg = src_payload;
+        if (state == SKID && next_state == BUSY) // move skid to main when transitioning out of skid
+            next_main_reg = skid_reg;
     end
 
     assign dst_payload = main_reg;

@@ -8,12 +8,13 @@ module axi_arbiter #(
     output logic [NUM_DEVICES-1:0] grant
 );
 
-    logic tf_started, lock;
+    logic tf_started, lock, next_lock;
     logic [NUM_DEVICES-1:0] next_grant, locked_grant, next_locked_grant, last_grant, next_last_grant, upper_mask, masked_req;
 
     always_comb begin : rr_logic
         tf_started = 0;
         next_grant = 0;
+        next_lock = lock;
         upper_mask = ~(last_grant | (last_grant-1)); // mask of valid devices above last device 
         masked_req = upper_mask & request; // devices above last device that are currently requesting  
 
@@ -38,6 +39,16 @@ module axi_arbiter #(
             next_last_grant = next_grant;
         else
             next_last_grant = last_grant;
+
+        if (tf_started) begin
+            if (grant != next_grant)
+                next_lock = 1;
+            else 
+                next_lock = 0;
+        end
+        else if (tf_finished) begin
+            next_lock = 0;
+        end
     end
 
     always_ff @(posedge clk, negedge n_rst) begin : grant_lock_ff
@@ -48,10 +59,7 @@ module axi_arbiter #(
             grant <= 0;
         end
         else begin
-            if (tf_finished)
-                lock <= 0;
-            else if (tf_started)
-                lock <= 1;
+            lock <= next_lock;
             locked_grant <= next_locked_grant;
             last_grant <= next_last_grant;
             grant <= next_grant;
