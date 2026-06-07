@@ -17,6 +17,7 @@ module axi_crossbar_wrapper #(
     input  logic [7:0]            m0_awlen,
     input  logic [2:0]            m0_awsize,
     input  logic [1:0]            m0_awburst,
+    input  logic                  m0_awlock,
     input  logic                  m0_awvalid,
     output logic                  m0_awready,
     input  logic [DATA_WIDTH-1:0] m0_wdata,
@@ -33,6 +34,7 @@ module axi_crossbar_wrapper #(
     input  logic [7:0]            m0_arlen,
     input  logic [2:0]            m0_arsize,
     input  logic [1:0]            m0_arburst,
+    input  logic                  m0_arlock,
     input  logic                  m0_arvalid,
     output logic                  m0_arready,
     output logic [ID_WIDTH-1:0]   m0_rid,
@@ -48,6 +50,7 @@ module axi_crossbar_wrapper #(
     input  logic [7:0]            m1_awlen,
     input  logic [2:0]            m1_awsize,
     input  logic [1:0]            m1_awburst,
+    input  logic                  m1_awlock,
     input  logic                  m1_awvalid,
     output logic                  m1_awready,
     input  logic [DATA_WIDTH-1:0] m1_wdata,
@@ -64,6 +67,7 @@ module axi_crossbar_wrapper #(
     input  logic [7:0]            m1_arlen,
     input  logic [2:0]            m1_arsize,
     input  logic [1:0]            m1_arburst,
+    input  logic                  m1_arlock,
     input  logic                  m1_arvalid,
     output logic                  m1_arready,
     output logic [ID_WIDTH-1:0]   m1_rid,
@@ -79,6 +83,7 @@ module axi_crossbar_wrapper #(
     output logic [7:0]            s0_awlen,
     output logic [2:0]            s0_awsize,
     output logic [1:0]            s0_awburst,
+    output logic                  s0_awlock,
     output logic                  s0_awvalid,
     input  logic                  s0_awready,
     output logic [DATA_WIDTH-1:0] s0_wdata,
@@ -95,6 +100,7 @@ module axi_crossbar_wrapper #(
     output logic [7:0]            s0_arlen,
     output logic [2:0]            s0_arsize,
     output logic [1:0]            s0_arburst,
+    output logic                  s0_arlock,
     output logic                  s0_arvalid,
     input  logic                  s0_arready,
     input  logic [ID_WIDTH-1:0]   s0_rid,
@@ -110,6 +116,7 @@ module axi_crossbar_wrapper #(
     output logic [7:0]            s1_awlen,
     output logic [2:0]            s1_awsize,
     output logic [1:0]            s1_awburst,
+    output logic                  s1_awlock,
     output logic                  s1_awvalid,
     input  logic                  s1_awready,
     output logic [DATA_WIDTH-1:0] s1_wdata,
@@ -126,6 +133,7 @@ module axi_crossbar_wrapper #(
     output logic [7:0]            s1_arlen,
     output logic [2:0]            s1_arsize,
     output logic [1:0]            s1_arburst,
+    output logic                  s1_arlock,
     output logic                  s1_arvalid,
     input  logic                  s1_arready,
     input  logic [ID_WIDTH-1:0]   s1_rid,
@@ -148,6 +156,7 @@ module axi_crossbar_wrapper #(
     assign m[0].awlen   = m0_awlen;
     assign m[0].awsize  = m0_awsize;
     assign m[0].awburst = m0_awburst;
+    assign m[0].awlock  = m0_awlock;
     assign m[0].awvalid = m0_awvalid;
     assign m0_awready      = m[0].awready;
     assign m[0].wdata   = m0_wdata;
@@ -164,6 +173,7 @@ module axi_crossbar_wrapper #(
     assign m[0].arlen   = m0_arlen;
     assign m[0].arsize  = m0_arsize;
     assign m[0].arburst = m0_arburst;
+    assign m[0].arlock  = m0_arlock;
     assign m[0].arvalid = m0_arvalid;
     assign m0_arready      = m[0].arready;
     assign m0_rid          = m[0].rid;
@@ -179,6 +189,7 @@ module axi_crossbar_wrapper #(
     assign m[1].awlen   = m1_awlen;
     assign m[1].awsize  = m1_awsize;
     assign m[1].awburst = m1_awburst;
+    assign m[1].awlock  = m1_awlock;
     assign m[1].awvalid = m1_awvalid;
     assign m1_awready      = m[1].awready;
     assign m[1].wdata   = m1_wdata;
@@ -195,6 +206,7 @@ module axi_crossbar_wrapper #(
     assign m[1].arlen   = m1_arlen;
     assign m[1].arsize  = m1_arsize;
     assign m[1].arburst = m1_arburst;
+    assign m[1].arlock  = m1_arlock;
     assign m[1].arvalid = m1_arvalid;
     assign m1_arready      = m[1].arready;
     assign m1_rid          = m[1].rid;
@@ -210,6 +222,7 @@ module axi_crossbar_wrapper #(
     assign s0_awlen        = s[0].awlen;
     assign s0_awsize       = s[0].awsize;
     assign s0_awburst      = s[0].awburst;
+    assign s0_awlock       = s[0].awlock;
     assign s0_awvalid      = s[0].awvalid;
     assign s[0].awready = s0_awready;
     assign s0_wdata        = s[0].wdata;
@@ -226,6 +239,7 @@ module axi_crossbar_wrapper #(
     assign s0_arlen        = s[0].arlen;
     assign s0_arsize       = s[0].arsize;
     assign s0_arburst      = s[0].arburst;
+    assign s0_arlock       = s[0].arlock;
     assign s0_arvalid      = s[0].arvalid;
     assign s[0].arready = s0_arready;
     assign s[0].rid     = s0_rid;
@@ -241,6 +255,7 @@ module axi_crossbar_wrapper #(
     assign s1_awlen        = s[1].awlen;
     assign s1_awsize       = s[1].awsize;
     assign s1_awburst      = s[1].awburst;
+    assign s1_awlock       = s[1].awlock;
     assign s1_awvalid      = s[1].awvalid;
     assign s[1].awready = s1_awready;
     assign s1_wdata        = s[1].wdata;
@@ -257,6 +272,7 @@ module axi_crossbar_wrapper #(
     assign s1_arlen        = s[1].arlen;
     assign s1_arsize       = s[1].arsize;
     assign s1_arburst      = s[1].arburst;
+    assign s1_arlock       = s[1].arlock;
     assign s1_arvalid      = s[1].arvalid;
     assign s[1].arready = s1_arready;
     assign s[1].rid     = s1_rid;

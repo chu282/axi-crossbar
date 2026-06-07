@@ -53,6 +53,7 @@ async def test_axi_arbiter(dut):
 
     await FallingEdge(clk)
     n_rst.value = 1
+    await FallingEdge(clk)
     
     dut._log.info("---- Single device ----")
     test.value = 1

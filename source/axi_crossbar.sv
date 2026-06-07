@@ -17,22 +17,24 @@ module axi_crossbar #(
 );
 
     // widths
-    localparam LEN_WIDTH = 8;
-    localparam SIZE_WIDTH = 3;
+    localparam LEN_WIDTH   = 8;
+    localparam SIZE_WIDTH  = 3;
     localparam BURST_WIDTH = 2;
-    localparam LAST_WIDTH = 1;
-    localparam RESP_WIDTH = 2;
+    localparam LAST_WIDTH  = 1;
+    localparam RESP_WIDTH  = 2;
+    localparam LOCK_WIDTH  = 1;
 
-    localparam PAYLOAD_WIDTH_AW = ADDR_WIDTH + ID_WIDTH + LEN_WIDTH + SIZE_WIDTH + BURST_WIDTH;
+    localparam PAYLOAD_WIDTH_AW = ADDR_WIDTH + ID_WIDTH + LEN_WIDTH + SIZE_WIDTH + BURST_WIDTH + LOCK_WIDTH;
     localparam PAYLOAD_WIDTH_W  = DATA_WIDTH + STRB_WIDTH + LAST_WIDTH;
     localparam PAYLOAD_WIDTH_B  = ID_WIDTH + RESP_WIDTH;
-    localparam PAYLOAD_WIDTH_AR = ADDR_WIDTH + ID_WIDTH + LEN_WIDTH + SIZE_WIDTH + BURST_WIDTH;
+    localparam PAYLOAD_WIDTH_AR = ADDR_WIDTH + ID_WIDTH + LEN_WIDTH + SIZE_WIDTH + BURST_WIDTH + LOCK_WIDTH;
     localparam PAYLOAD_WIDTH_R  = ID_WIDTH + DATA_WIDTH + RESP_WIDTH + LAST_WIDTH;
 
     // AW Channel
     logic [NUM_MASTERS-1:0] aw_m_valid_skid;
     logic [NUM_MASTERS-1:0] aw_m_ready_skid;
     logic [ADDR_WIDTH-1:0] aw_m_addr_skid [NUM_MASTERS-1:0];
+    logic [ID_WIDTH-1:0] aw_m_id_skid [NUM_MASTERS-1:0];
     logic [PAYLOAD_WIDTH_AW-1:0] aw_m_payload_skid [NUM_MASTERS-1:0];
 
     logic [NUM_SLAVES-1:0] aw_s_valid_mux;
@@ -54,6 +56,7 @@ module axi_crossbar #(
     logic [NUM_MASTERS-1:0] ar_m_valid_skid;
     logic [NUM_MASTERS-1:0] ar_m_ready_skid;
     logic [ADDR_WIDTH-1:0] ar_m_addr_skid [NUM_MASTERS-1:0];
+    logic [ID_WIDTH-1:0] ar_m_id_skid [NUM_MASTERS-1:0];
     logic [PAYLOAD_WIDTH_AR-1:0] ar_m_payload_skid [NUM_MASTERS-1:0];
 
     logic [NUM_SLAVES-1:0] ar_s_valid_mux;
@@ -94,6 +97,18 @@ module axi_crossbar #(
 
     // ========== SKID BUFFERS ========== //
     // Forward path
+    logic [NUM_MASTERS-1:0] decerr_handled_aw_m_ready;
+    logic [NUM_MASTERS-1:0] decerr_handled_ar_m_ready;
+    logic [NUM_MASTERS-1:0] decerr_handled_w_ready;
+
+    always_comb begin
+        for (int m_idx = 0; m_idx < NUM_MASTERS; m_idx++) begin
+            decerr_handled_aw_m_ready[m_idx] = decerr_aw_grant[m_idx] ? decerr_aw_ready[m_idx] : aw_m_ready_skid[m_idx];
+            decerr_handled_ar_m_ready[m_idx] = decerr_ar_grant[m_idx] ? decerr_ar_ready[m_idx] : ar_m_ready_skid[m_idx];
+            decerr_handled_w_ready[m_idx] = decerr_aw_grant[m_idx] ? decerr_w_ready[m_idx] : w_m_ready_skid[m_idx];
+        end
+    end
+
     genvar m_idx, s_idx;
     generate
         // Master side
@@ -103,18 +118,18 @@ module axi_crossbar #(
                 .src_valid(m[m_idx].awvalid), 
                 .dst_valid(aw_m_valid_skid[m_idx]), 
                 .src_ready(m[m_idx].awready), 
-                .dst_ready(aw_m_ready_skid[m_idx]), 
-                .src_payload({m[m_idx].awaddr, m[m_idx].awid, m[m_idx].awlen, m[m_idx].awsize, m[m_idx].awburst}), 
+                .dst_ready(decerr_handled_aw_m_ready[m_idx]), 
+                .src_payload({m[m_idx].awaddr, m[m_idx].awid, m[m_idx].awlen, m[m_idx].awsize, m[m_idx].awburst, m[m_idx].awlock}), 
                 .dst_payload(aw_m_payload_skid[m_idx]), .*
                 );
-            assign aw_m_addr_skid[m_idx] = aw_m_payload_skid[m_idx][PAYLOAD_WIDTH_AW-1:PAYLOAD_WIDTH_AW-ADDR_WIDTH];
+            assign aw_m_addr_skid[m_idx] = aw_m_payload_skid[m_idx][PAYLOAD_WIDTH_AW-1:PAYLOAD_WIDTH_AW-ADDR_WIDTH]; // extract addr for use in decoder
 
             // W Channel
             axi_skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_W)) sb_w_master (
                 .src_valid(m[m_idx].wvalid), 
                 .dst_valid(w_m_valid_skid[m_idx]), 
                 .src_ready(m[m_idx].wready), 
-                .dst_ready(w_m_ready_skid[m_idx]), 
+                .dst_ready(decerr_handled_w_ready[m_idx]), 
                 .src_payload({m[m_idx].wdata, m[m_idx].wstrb, m[m_idx].wlast}), 
                 .dst_payload(w_m_payload_skid[m_idx]), .*
                 );
@@ -124,11 +139,11 @@ module axi_crossbar #(
                 .src_valid(m[m_idx].arvalid), 
                 .dst_valid(ar_m_valid_skid[m_idx]), 
                 .src_ready(m[m_idx].arready), 
-                .dst_ready(ar_m_ready_skid[m_idx]), 
-                .src_payload({m[m_idx].araddr, m[m_idx].arid, m[m_idx].arlen, m[m_idx].arsize, m[m_idx].arburst}), 
+                .dst_ready(decerr_handled_ar_m_ready[m_idx]), 
+                .src_payload({m[m_idx].araddr, m[m_idx].arid, m[m_idx].arlen, m[m_idx].arsize, m[m_idx].arburst, m[m_idx].arlock}), 
                 .dst_payload(ar_m_payload_skid[m_idx]), .*
                 );
-            assign ar_m_addr_skid[m_idx] = ar_m_payload_skid[m_idx][PAYLOAD_WIDTH_AR-1:PAYLOAD_WIDTH_AR-ADDR_WIDTH];
+            assign ar_m_addr_skid[m_idx] = ar_m_payload_skid[m_idx][PAYLOAD_WIDTH_AR-1:PAYLOAD_WIDTH_AR-ADDR_WIDTH]; // extract addr for use in decoder 
         end
         
         // Slave side
@@ -140,7 +155,7 @@ module axi_crossbar #(
                 .src_ready(aw_s_ready_mux[s_idx]), 
                 .dst_ready(s[s_idx].awready), 
                 .src_payload(aw_s_payload_mux[s_idx]), 
-                .dst_payload({s[s_idx].awaddr, s[s_idx].awid, s[s_idx].awlen, s[s_idx].awsize, s[s_idx].awburst}), .*
+                .dst_payload({s[s_idx].awaddr, s[s_idx].awid, s[s_idx].awlen, s[s_idx].awsize, s[s_idx].awburst, s[s_idx].awlock}), .*
                 );
 
             // W Channel
@@ -160,12 +175,29 @@ module axi_crossbar #(
                 .src_ready(ar_s_ready_mux[s_idx]), 
                 .dst_ready(s[s_idx].arready), 
                 .src_payload(ar_s_payload_mux[s_idx]), 
-                .dst_payload({s[s_idx].araddr, s[s_idx].arid, s[s_idx].arlen, s[s_idx].arsize, s[s_idx].arburst}), .*
+                .dst_payload({s[s_idx].araddr, s[s_idx].arid, s[s_idx].arlen, s[s_idx].arsize, s[s_idx].arburst, s[s_idx].arlock}), .*
                 );
         end
     endgenerate
 
     // Reverse path
+    logic [NUM_MASTERS-1:0] decerr_bvalid;
+    logic [NUM_MASTERS-1:0] decerr_rvalid;
+
+    logic [PAYLOAD_WIDTH_B-1:0] decerr_handled_b_m_payload [NUM_MASTERS-1:0];
+    logic [PAYLOAD_WIDTH_R-1:0] decerr_handled_r_m_payload [NUM_MASTERS-1:0];
+    logic [NUM_MASTERS-1:0] decerr_handled_b_m_valid [NUM_MASTERS-1:0];
+    logic [NUM_MASTERS-1:0] decerr_handled_r_m_valid [NUM_MASTERS-1:0];
+
+    always_comb begin
+        for (m_idx = 0; m_idx < NUM_MASTERS; m_idx++) begin
+            decerr_handled_b_m_payload[m_idx] = decerr_aw_grant[m_idx] ? decerr_bpayload[m_idx] : b_m_payload_mux[m_idx];
+            decerr_handled_r_m_payload[m_idx] = decerr_ar_grant[m_idx] ? decerr_rpayload[m_idx] : r_m_payload_mux[m_idx];
+            decerr_handled_b_m_valid[m_idx] = decerr_aw_grant[m_idx] ? decerr_bvalid[m_idx] : b_m_valid_mux[m_idx];
+            decerr_handled_r_m_valid[m_idx] = decerr_ar_grant[m_idx] ? decerr_rvalid[m_idx] : r_m_valid_mux[m_idx];
+        end
+    end
+
     generate
         // Slave side
         for (s_idx = 0; s_idx < NUM_SLAVES; s_idx++) begin
@@ -196,21 +228,21 @@ module axi_crossbar #(
         for (m_idx = 0; m_idx < NUM_MASTERS; m_idx++) begin
             // B Channel
             axi_skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_B)) sb_b_master (
-                .src_valid(b_m_valid_mux[m_idx]), 
+                .src_valid(decerr_handled_b_m_valid[m_idx]), 
                 .dst_valid(m[m_idx].bvalid), 
                 .src_ready(b_m_ready_mux[m_idx]), 
                 .dst_ready(m[m_idx].bready), 
-                .src_payload(b_m_payload_mux[m_idx]), 
+                .src_payload(decerr_handled_b_m_payload[m_idx]), 
                 .dst_payload({m[m_idx].bid, m[m_idx].bresp}), .*
                 );
 
             // R Channel
             axi_skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_R)) sb_r_master (
-                .src_valid(r_m_valid_mux[m_idx]), 
+                .src_valid(decerr_handled_r_m_valid[m_idx]), 
                 .dst_valid(m[m_idx].rvalid), 
                 .src_ready(r_m_ready_mux[m_idx]), 
                 .dst_ready(m[m_idx].rready), 
-                .src_payload(r_m_payload_mux[m_idx]), 
+                .src_payload(decerr_handled_r_m_payload[m_idx]), 
                 .dst_payload({m[m_idx].rid, m[m_idx].rdata, m[m_idx].rresp, m[m_idx].rlast}), .*
                 );
         end
@@ -465,7 +497,6 @@ module axi_crossbar #(
                 .dst_payload(r_m_payload_mux[m_idx])
             );
         end
-
     endgenerate
 
     // Combine the ready arrays into the final output
@@ -526,6 +557,53 @@ module axi_crossbar #(
                 .i_grant(ar_grant[s_idx]), 
                 .full(ar_full[s_idx]), 
                 .o_grant(r_master_req[s_idx]), .*
+            );
+        end
+    endgenerate
+
+    // ========== DECERR HANDLER ========== //
+    always_comb begin
+        for (int i = 0; i < NUM_MASTERS; i++) begin
+            aw_m_id_skid[i] = aw_m_payload_skid[i][14+:ID_WIDTH];
+            ar_m_id_skid[i] = ar_m_payload_skid[i][14+:ID_WIDTH];
+        end
+    end
+
+    generate
+        for (m_idx = 0; m_idx < NUM_MASTERS; m_idx++) begin
+            axi_decerr_handler #(
+                .ID_WIDTH(ID_WIDTH),
+                .PAYLOAD_WIDTH(PAYLOAD_WIDTH_B)
+            ) dh_aw (
+                .skip_write(0),
+                .decerr(aw_decerr[m_idx]), 
+                .response_ready(b_m_ready_mux[m_idx]),
+                .write_valid(w_m_valid_skid[m_idx]),
+                .write_last(w_m_payload_skid[m_idx][0]),
+                .address_id(aw_m_id_skid[m_idx]),
+                .response_valid(decerr_bvalid[m_idx]),
+                .response_payload(decerr_bpayload[m_idx]), 
+                .address_ready(decerr_aw_ready[m_idx]),
+                .write_ready(decerr_w_ready[m_idx]), 
+                .decerr_grant(decerr_aw_grant[m_idx]), .*
+            );
+            
+            /* verilator lint_off PINCONNECTEMPTY */
+            axi_decerr_handler #( 
+                .ID_WIDTH(ID_WIDTH),
+                .PAYLOAD_WIDTH(PAYLOAD_WIDTH_R)
+            ) dh_ar (
+                .skip_write(1),
+                .decerr(ar_decerr[m_idx]), 
+                .response_ready(r_m_ready_mux[m_idx]),
+                .write_valid(),
+                .write_last(),
+                .address_id(ar_m_id_skid[m_idx]),
+                .response_valid(decerr_rvalid[m_idx]), 
+                .response_payload(decerr_rpayload[m_idx]), 
+                .address_ready(decerr_ar_ready[m_idx]),
+                .write_ready(), 
+                .decerr_grant(decerr_ar_grant[m_idx]), .*
             );
         end
     endgenerate

@@ -13,6 +13,7 @@ interface axi_if #(
     logic [7:0] awlen;
     logic [2:0] awsize;
     logic [1:0] awburst;
+    logic awlock;
     logic awvalid, awready;
 
     // W Channel
@@ -32,6 +33,7 @@ interface axi_if #(
     logic [7:0] arlen;
     logic [2:0] arsize;
     logic [1:0] arburst;
+    logic arlock;
     logic arvalid, arready;
 
     // R Channel
@@ -43,9 +45,9 @@ interface axi_if #(
 
     modport master (
         // outputs
-        output awaddr, awid, awlen, awsize, awburst, awvalid,
+        output awaddr, awid, awlen, awsize, awburst, awlock, awvalid,
         output wdata, wstrb, wlast, wvalid,
-        output araddr, arid, arlen, arsize, arburst, arvalid,
+        output araddr, arid, arlen, arsize, arburst, arlock, arvalid,
         output bready, rready,
         // inputs
         input  awready, wready, arready,
@@ -55,9 +57,9 @@ interface axi_if #(
 
     modport slave (
         // inputs
-        input  awaddr, awid, awlen, awsize, awburst, awvalid,
+        input  awaddr, awid, awlen, awsize, awburst, awlock, awvalid,
         input  wdata, wstrb, wlast, wvalid,
-        input  araddr, arid, arlen, arsize, arburst, arvalid,
+        input  araddr, arid, arlen, arsize, arburst, arlock, arvalid,
         input  bready, rready,
         // outputs
         output awready, wready, arready,
