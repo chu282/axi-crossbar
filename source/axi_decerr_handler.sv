@@ -1,17 +1,21 @@
 module axi_decerr_handler #(
-    parameter ID_WIDTH = 4, 
-    parameter PAYLOAD_WIDTH = 6
+    parameter ID_WIDTH = 4,
+    parameter LEN_WIDTH = 8
 ) (
     input  logic clk, n_rst, 
-    input  logic skip_write, decerr, response_ready, write_valid, write_last, 
+    input  logic write, decerr, response_ready, write_valid, write_last, 
     input  logic [ID_WIDTH-1:0] address_id, 
-    output logic response_valid, address_ready, write_ready, decerr_grant,
-    output logic [PAYLOAD_WIDTH-1:0] response_payload
+    input  logic [LEN_WIDTH-1:0] read_len, 
+    output logic response_valid, response_last, address_ready, write_ready, decerr_grant,
+    output logic [ID_WIDTH-1:0] response_id,
+    output logic [1:0] response_resp
 );
 
     localparam DECERR = 2'b11;
 
-    logic [ID_WIDTH-1:0] response_id;
+    logic [ID_WIDTH-1:0] captured_id;
+    logic [LEN_WIDTH-1:0] captured_len;
+    logic [LEN_WIDTH-1:0] sent_responses;
 
     typedef enum logic [1:0] {
         IDLE, SEND_ADDR_READY, SEND_W_READY, SEND_RESP
@@ -28,12 +32,19 @@ module axi_decerr_handler #(
         end
     end
 
-    always_ff @(posedge clk, negedge n_rst) begin : id_ff
+    always_ff @(posedge clk, negedge n_rst) begin : capture_ff
         if(~n_rst) begin
-            response_id <= 0;
+            captured_id <= 0;
+            captured_len <= 0;
+            sent_responses <= 0;
         end
         else if (state == IDLE && next_state == SEND_ADDR_READY) begin
-            response_id <= address_id;
+            captured_id <= address_id;
+            captured_len <= read_len;
+            sent_responses <= 0;
+        end
+        else if (state == SEND_RESP && response_ready) begin
+            sent_responses <= sent_responses + 1;
         end
     end
 
@@ -44,14 +55,17 @@ module axi_decerr_handler #(
                 next_state = decerr ? SEND_ADDR_READY : IDLE;
             end
             SEND_ADDR_READY: begin // dont need to wait, address already valid
-                next_state = skip_write ? SEND_RESP : SEND_W_READY;
+                if (write) 
+                    next_state = SEND_W_READY;
+                else 
+                    next_state = SEND_RESP;
             end
             SEND_W_READY: begin // wait until last data sent (although we dont need it)
                 if (write_valid && write_last)
                     next_state = SEND_RESP;
             end
-            SEND_RESP: begin // wait until response is ready to be accepted
-                if (response_ready)
+            SEND_RESP: begin // send read_len responses
+                if (response_ready && (sent_responses == captured_len)) 
                     next_state = IDLE;
             end
             default: next_state = IDLE;
@@ -64,36 +78,46 @@ module axi_decerr_handler #(
                 address_ready = 0;
                 write_ready = 0;
                 response_valid = 0;
-                response_payload = 0;
+                response_resp = 0;
+                response_id = 0;
                 decerr_grant = 0;
+                response_last = 0;
             end
             SEND_ADDR_READY: begin
                 address_ready = 1;
                 write_ready = 0;
                 response_valid = 0;
-                response_payload = 0;
+                response_resp = 0;
+                response_id = 0;
                 decerr_grant = 1;
+                response_last = 0;
             end
             SEND_W_READY: begin
                 address_ready = 0;
                 write_ready = 1;
                 response_valid = 0;
-                response_payload = 0;
+                response_resp = 0;
+                response_id = 0;
                 decerr_grant = 1;
+                response_last = 0;
             end
             SEND_RESP: begin
                 address_ready = 0;
                 write_ready = 0;
                 response_valid = 1;
-                response_payload = {response_id, DECERR};
+                response_resp = DECERR;
+                response_id = captured_id;
                 decerr_grant = 1;
+                response_last = (sent_responses == captured_len) ? 1 : 0;
             end
             default: begin
                 address_ready = 0;
                 write_ready = 0;
                 response_valid = 0;
-                response_payload = 0;
+                response_resp = 0;
+                response_id = 0;
                 decerr_grant = 0;
+                response_last = 0;
             end
         endcase
     end

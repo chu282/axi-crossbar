@@ -99,13 +99,18 @@ module axi_crossbar #(
     // Forward path
     logic [NUM_MASTERS-1:0] decerr_handled_aw_m_ready;
     logic [NUM_MASTERS-1:0] decerr_handled_ar_m_ready;
-    logic [NUM_MASTERS-1:0] decerr_handled_w_ready;
+    logic [NUM_MASTERS-1:0] decerr_handled_w_m_ready;
+    logic [NUM_MASTERS-1:0] decerr_aw_ready;
+    logic [NUM_MASTERS-1:0] decerr_ar_ready;
+    logic [NUM_MASTERS-1:0] decerr_w_ready;
+    logic [NUM_MASTERS-1:0] decerr_aw_grant;
+    logic [NUM_MASTERS-1:0] decerr_ar_grant;
 
     always_comb begin
         for (int m_idx = 0; m_idx < NUM_MASTERS; m_idx++) begin
             decerr_handled_aw_m_ready[m_idx] = decerr_aw_grant[m_idx] ? decerr_aw_ready[m_idx] : aw_m_ready_skid[m_idx];
             decerr_handled_ar_m_ready[m_idx] = decerr_ar_grant[m_idx] ? decerr_ar_ready[m_idx] : ar_m_ready_skid[m_idx];
-            decerr_handled_w_ready[m_idx] = decerr_aw_grant[m_idx] ? decerr_w_ready[m_idx] : w_m_ready_skid[m_idx];
+            decerr_handled_w_m_ready[m_idx] = decerr_aw_grant[m_idx] ? decerr_w_ready[m_idx] : w_m_ready_skid[m_idx];
         end
     end
 
@@ -129,7 +134,7 @@ module axi_crossbar #(
                 .src_valid(m[m_idx].wvalid), 
                 .dst_valid(w_m_valid_skid[m_idx]), 
                 .src_ready(m[m_idx].wready), 
-                .dst_ready(decerr_handled_w_ready[m_idx]), 
+                .dst_ready(decerr_handled_w_m_ready[m_idx]), 
                 .src_payload({m[m_idx].wdata, m[m_idx].wstrb, m[m_idx].wlast}), 
                 .dst_payload(w_m_payload_skid[m_idx]), .*
                 );
@@ -181,8 +186,15 @@ module axi_crossbar #(
     endgenerate
 
     // Reverse path
-    logic [NUM_MASTERS-1:0] decerr_bvalid;
-    logic [NUM_MASTERS-1:0] decerr_rvalid;
+    logic [NUM_MASTERS-1:0] decerr_b_valid;
+    logic [NUM_MASTERS-1:0] decerr_r_valid;
+    logic [ID_WIDTH-1:0] decerr_b_id [NUM_MASTERS-1:0];
+    logic [ID_WIDTH-1:0] decerr_r_id [NUM_MASTERS-1:0];
+    logic [RESP_WIDTH-1:0] decerr_b_resp [NUM_MASTERS-1:0];
+    logic [RESP_WIDTH-1:0] decerr_r_resp [NUM_MASTERS-1:0];
+    logic [NUM_MASTERS-1:0] decerr_r_last;
+    logic [PAYLOAD_WIDTH_B-1:0] decerr_b_payload [NUM_MASTERS-1:0];
+    logic [PAYLOAD_WIDTH_R-1:0] decerr_r_payload [NUM_MASTERS-1:0];
 
     logic [PAYLOAD_WIDTH_B-1:0] decerr_handled_b_m_payload [NUM_MASTERS-1:0];
     logic [PAYLOAD_WIDTH_R-1:0] decerr_handled_r_m_payload [NUM_MASTERS-1:0];
@@ -190,11 +202,14 @@ module axi_crossbar #(
     logic [NUM_MASTERS-1:0] decerr_handled_r_m_valid [NUM_MASTERS-1:0];
 
     always_comb begin
-        for (m_idx = 0; m_idx < NUM_MASTERS; m_idx++) begin
-            decerr_handled_b_m_payload[m_idx] = decerr_aw_grant[m_idx] ? decerr_bpayload[m_idx] : b_m_payload_mux[m_idx];
-            decerr_handled_r_m_payload[m_idx] = decerr_ar_grant[m_idx] ? decerr_rpayload[m_idx] : r_m_payload_mux[m_idx];
-            decerr_handled_b_m_valid[m_idx] = decerr_aw_grant[m_idx] ? decerr_bvalid[m_idx] : b_m_valid_mux[m_idx];
-            decerr_handled_r_m_valid[m_idx] = decerr_ar_grant[m_idx] ? decerr_rvalid[m_idx] : r_m_valid_mux[m_idx];
+        for (int m_idx = 0; m_idx < NUM_MASTERS; m_idx++) begin
+            decerr_b_payload[m_idx] = {decerr_b_id[m_idx], decerr_b_resp[m_idx]};
+            decerr_r_payload[m_idx] = {decerr_r_id[m_idx], 32'd0, decerr_r_resp[m_idx], decerr_r_last[m_idx]};
+
+            decerr_handled_b_m_payload[m_idx] = decerr_aw_grant[m_idx] ? decerr_b_payload[m_idx] : b_m_payload_mux[m_idx];
+            decerr_handled_r_m_payload[m_idx] = decerr_ar_grant[m_idx] ? decerr_r_payload[m_idx] : r_m_payload_mux[m_idx];
+            decerr_handled_b_m_valid[m_idx]   = decerr_aw_grant[m_idx] ? decerr_b_valid[m_idx]   : b_m_valid_mux[m_idx];
+            decerr_handled_r_m_valid[m_idx]   = decerr_ar_grant[m_idx] ? decerr_r_valid[m_idx]   : r_m_valid_mux[m_idx];
         end
     end
 
@@ -569,43 +584,50 @@ module axi_crossbar #(
         end
     end
 
+    /* verilator lint_off PINCONNECTEMPTY */
     generate
         for (m_idx = 0; m_idx < NUM_MASTERS; m_idx++) begin
             axi_decerr_handler #(
                 .ID_WIDTH(ID_WIDTH),
-                .PAYLOAD_WIDTH(PAYLOAD_WIDTH_B)
+                .LEN_WIDTH(LEN_WIDTH)
             ) dh_aw (
-                .skip_write(0),
+                .write(1),
                 .decerr(aw_decerr[m_idx]), 
                 .response_ready(b_m_ready_mux[m_idx]),
                 .write_valid(w_m_valid_skid[m_idx]),
                 .write_last(w_m_payload_skid[m_idx][0]),
                 .address_id(aw_m_id_skid[m_idx]),
-                .response_valid(decerr_bvalid[m_idx]),
-                .response_payload(decerr_bpayload[m_idx]), 
+                .read_len(0),
+                .response_valid(decerr_b_valid[m_idx]),
+                .response_id(decerr_b_id[m_idx]),
+                .response_resp(decerr_b_resp[m_idx]), 
+                .response_last(),
                 .address_ready(decerr_aw_ready[m_idx]),
                 .write_ready(decerr_w_ready[m_idx]), 
                 .decerr_grant(decerr_aw_grant[m_idx]), .*
             );
             
-            /* verilator lint_off PINCONNECTEMPTY */
             axi_decerr_handler #( 
                 .ID_WIDTH(ID_WIDTH),
-                .PAYLOAD_WIDTH(PAYLOAD_WIDTH_R)
+                .LEN_WIDTH(LEN_WIDTH)
             ) dh_ar (
-                .skip_write(1),
+                .write(0),
                 .decerr(ar_decerr[m_idx]), 
                 .response_ready(r_m_ready_mux[m_idx]),
                 .write_valid(),
                 .write_last(),
                 .address_id(ar_m_id_skid[m_idx]),
-                .response_valid(decerr_rvalid[m_idx]), 
-                .response_payload(decerr_rpayload[m_idx]), 
+                .read_len(ar_m_payload_skid[m_idx][6+:LEN_WIDTH]),
+                .response_valid(decerr_r_valid[m_idx]), 
+                .response_id(decerr_r_id[m_idx]),
+                .response_resp(decerr_r_resp[m_idx]), 
+                .response_last(decerr_r_last[m_idx]),
                 .address_ready(decerr_ar_ready[m_idx]),
                 .write_ready(), 
                 .decerr_grant(decerr_ar_grant[m_idx]), .*
             );
         end
     endgenerate
+    /* verilator lint_on PINCONNECTEMPTY */
 
 endmodule
