@@ -7,7 +7,11 @@ module axi_crossbar_wrapper #(
     parameter STRB_WIDTH = (DATA_WIDTH/8),
     parameter NUM_MASTERS = 2,
     parameter NUM_SLAVES = 2,
-    parameter MAX_OUTSTANDING_TX = 8
+    parameter MAX_OUTSTANDING_TX = 8,
+
+    // Slave addresses
+    parameter [ADDR_WIDTH-1:0] SLAVE_BASE_ADDR [NUM_SLAVES-1:0] = '{32'h80000000, 32'h00000000},
+    parameter [ADDR_WIDTH-1:0] SLAVE_ADDR_MASK [NUM_SLAVES-1:0] = '{32'hF0000000, 32'h80000000}
 ) (
     input  logic clk, n_rst,
 
@@ -290,7 +294,9 @@ module axi_crossbar_wrapper #(
         .ADDR_WIDTH(ADDR_WIDTH),
         .DATA_WIDTH(DATA_WIDTH),
         .ID_WIDTH(ID_WIDTH),
-        .STRB_WIDTH(STRB_WIDTH)
+        .STRB_WIDTH(STRB_WIDTH),
+        .SLAVE_BASE_ADDR(SLAVE_BASE_ADDR),
+        .SLAVE_ADDR_MASK(SLAVE_ADDR_MASK)
     ) dut (.*);
 
 endmodule

@@ -4,7 +4,7 @@ import random
 from cocotb.clock import Clock
 from cocotb.triggers import FallingEdge
 
-NUM_TESTS = 1000
+NUM_TESTS = 10000
 DECERR = 0b11
 
 @cocotb.test()

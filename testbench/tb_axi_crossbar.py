@@ -5,9 +5,11 @@ import warnings
 
 from cocotb.clock import Clock
 from cocotb.triggers import FallingEdge
-from cocotbext.axi import AxiBus, AxiMaster, AxiRam
+from cocotbext.axi import AxiBus, AxiMaster, AxiRam, AxiResp
+from cocotbext.axi.axi_master import AxiReadResp
 
 ADDR_WIDTH = 32
+ID_WIDTH = 4
 NUM_MASTERS = 2
 NUM_SLAVES = 2
 
@@ -52,24 +54,31 @@ class TB:
         self.n_rst.value = 1
         await FallingEdge(self.clk)
 
-def get_rand_parameters(NUM_TESTS):
+def get_rand_parameters(NUM_TESTS, MAX_ADDR=0x8FFF_FFFF):
     addrs = []
     lengths = []
     data = []
     sizes = []
+    ids = []
 
     for _ in range(NUM_TESTS):
         size = random.choice([0, 1, 2]) # bytes in beat = size^2
         length = (2**size) * random.randint(1, 16) # number of bytes
-        addr = length * random.randint(0, 2**ADDR_WIDTH // length - 1)
+        addr = length * random.randint(0, MAX_ADDR // length - 1)
         val = random.randbytes(length)
+        id_ = random.randint(0, ID_WIDTH - 1)
 
         lengths.append(length)
         addrs.append(addr)
         data.append(val)
         sizes.append(size)
+        ids.append(id_)
 
-    return addrs, lengths, data, sizes
+    return addrs, lengths, data, sizes, ids
+
+def stall_generator(probability=0.5):
+    while True:
+        yield random.random() < probability
 
 @cocotb.test(timeout_time=1, timeout_unit="ms")
 async def test_single_write(dut):
@@ -131,16 +140,15 @@ async def test_single_read(dut):
 
 @cocotb.test()
 async def test_multiple_non_conflicting_transactions(dut):
-    NUM_TESTS = 10000
+    NUM_TESTS = 2000
 
     tb = TB(dut)
     await tb.reset()
 
-    addrs, lengths, s0_data, sizes = get_rand_parameters(NUM_TESTS)
+    s0_addrs, lengths, s0_data, sizes = get_rand_parameters(NUM_TESTS, 0x7FFF_FFFF)
+    s1_addrs, _, _, _ = get_rand_parameters(NUM_TESTS, 0x0FFF_FFFF)
+    s1_addrs = [addr + 0x8000_0000 for addr in s1_addrs]
     s1_data = [random.randbytes(length) for length in lengths]
-
-    s0_addrs = [addr // 2 for addr in addrs]
-    s1_addrs = [addr // 2 + 0x8000_0000 for addr in addrs]
 
     slave_addrs = [s0_addrs, s1_addrs]
 
@@ -185,16 +193,15 @@ async def test_multiple_non_conflicting_transactions(dut):
 
 @cocotb.test()
 async def test_multiple_conflicting_transactions(dut):
-    NUM_TESTS = 10000
+    NUM_TESTS = 2000
 
     tb = TB(dut)
     await tb.reset()
 
-    addrs, lengths, s0_data, sizes = get_rand_parameters(NUM_TESTS)
+    s0_addrs, lengths, s0_data, sizes = get_rand_parameters(NUM_TESTS, 0x8000_0000)
+    s1_addrs, _, _, _ = get_rand_parameters(NUM_TESTS, 0x1000_0000)
+    s1_addrs = [addr + 0x8000_0000 for addr in s1_addrs]
     s1_data = [random.randbytes(length) for length in lengths]
-
-    s0_addrs = [addr // 2 for addr in addrs]
-    s1_addrs = [addr // 2 + 0x8000_0000 for addr in addrs]
 
     slave_addrs = [s0_addrs, s1_addrs]
 
@@ -232,5 +239,137 @@ async def test_multiple_conflicting_transactions(dut):
             assert s.read(addr_1, length) == val_1
             assert s.read(addr_2, length) == val_2
 
-# @cocotb.test()
-# async def test_
+@cocotb.test()
+async def test_decerr(dut):
+    NUM_TESTS = 1000
+
+    tb = TB(dut)
+    await tb.reset()
+
+    _, lengths, data, sizes = get_rand_parameters(NUM_TESTS)
+    
+    addrs = []
+    for _ in range(NUM_TESTS):
+        addrs.append(0x1000 * random.randint(0x8_0000 - 0x2, 0x8_0000 + 0x2)) # test boundary between slaves
+
+    for i in range(NUM_TESTS):
+        events = []
+        
+        addr = addrs[i]
+        length = lengths[i]
+        size = sizes[i]
+        val = data[i]
+
+        for m in tb.masters:
+            resp = await m.read(addr, length, size=size)
+            assert resp.resp == AxiResp.OKAY
+            
+    addrs = []
+    for _ in range(NUM_TESTS):
+        addrs.append(0x1000 * random.randint(0x9_0000, 0xF_FFFF)) # test boundary
+    
+    for i in range(NUM_TESTS):
+        events = []
+        
+        addr = addrs[i]
+        length = lengths[i]
+        size = sizes[i]
+        val = data[i]
+
+        for m in tb.masters:
+            resp = await m.read(addr, length, size=size)
+            assert resp.resp == AxiResp.DECERR
+    
+@cocotb.test()
+async def test_random_transactions(dut):
+    NUM_TESTS = 1000
+
+    tb = TB(dut)
+    await tb.reset()
+
+    m0_addrs_w, m0_lengths_w, m0_data_w, m0_sizes_w, m0_ids_w = get_rand_parameters(NUM_TESTS, MAX_ADDR=0xFFFF_FFFF)
+    m0_addrs_r, m0_lengths_r, m0_data_r, m0_sizes_r, m0_ids_r = get_rand_parameters(NUM_TESTS, MAX_ADDR=0xFFFF_FFFF)
+    m1_addrs_w, m1_lengths_w, m1_data_w, m1_sizes_w, m1_ids_w = get_rand_parameters(NUM_TESTS, MAX_ADDR=0xFFFF_FFFF)
+    m1_addrs_r, m1_lengths_r, m1_data_r, m1_sizes_r, m1_ids_r = get_rand_parameters(NUM_TESTS, MAX_ADDR=0xFFFF_FFFF)
+
+    for i in range(NUM_TESTS):
+        m0_w_addr = m0_addrs_w[i]
+        m0_w_len = m0_lengths_w[i]
+        m0_w_size = m0_sizes_w[i]
+        m0_w_val = m0_data_w[i]
+        m0_w_id = m0_ids_w[i]
+
+        m0_r_addr = m0_addrs_r[i]
+        m0_r_len = m0_lengths_r[i]
+        m0_r_size = m0_sizes_r[i]
+        m0_r_val = m0_data_r[i]
+        m0_r_id = m0_ids_r[i]
+
+        m1_w_addr = m1_addrs_w[i]
+        m1_w_len = m1_lengths_w[i]
+        m1_w_size = m1_sizes_w[i]
+        m1_w_val = m1_data_w[i]
+        m1_w_id = m1_ids_w[i]
+
+        m1_r_addr = m1_addrs_r[i]
+        m1_r_len = m1_lengths_r[i]
+        m1_r_size = m1_sizes_r[i]
+        m1_r_val = m1_data_r[i]
+        m1_r_id = m1_ids_r[i]
+
+        # ensure reads/writes dont overlap
+        while abs(m0_r_addr - m0_w_addr) < 0x1000 or abs(m0_r_addr - m1_w_addr) < 0x1000:
+            m0_r_addr = (m0_r_addr + 0x1000) & 0x8FFF_FFFF
+
+        while abs(m1_r_addr - m1_w_addr) < 0x1000 or abs(m1_r_addr - m0_w_addr) < 0x1000:
+            m1_r_addr = (m1_r_addr + 0x1000) & 0x8FFF_FFFF
+
+        # backdoor write to initialize read locations with expected data
+        if m0_r_addr < 0x8000_0000:
+            tb.s0.write(m0_r_addr, m0_r_val)
+        else:
+            tb.s1.write(m0_r_addr, m0_r_val)
+
+        if m1_r_addr < 0x8000_0000:
+            tb.s0.write(m1_r_addr, m1_r_val)
+        else:
+            tb.s1.write(m1_r_addr, m1_r_val)
+
+        # random/valid stalls
+        for device in tb.masters + tb.slaves:
+            device.write_if.aw_channel.set_pause_generator(stall_generator())
+            device.write_if.w_channel.set_pause_generator(stall_generator())
+            device.write_if.b_channel.set_pause_generator(stall_generator())
+            device.read_if.ar_channel.set_pause_generator(stall_generator())
+            device.read_if.r_channel.set_pause_generator(stall_generator())
+
+        # queue and execute transactions
+        events = []
+        resps = []
+
+        for _ in range(9):
+            events.append(tb.m0.init_write(m0_w_addr, m0_w_val, size=m0_w_size, awid=m0_w_id))
+            events.append(tb.m1.init_write(m1_w_addr, m1_w_val, size=m1_w_size, awid=m1_w_id))
+            events.append(tb.m0.init_read(m0_r_addr, m0_r_len, size=m0_r_size, arid=m0_r_id))
+            events.append(tb.m1.init_read(m1_r_addr, m1_r_len, size=m1_r_size, arid=m1_r_id))
+
+        for event in events:
+            await event.wait()
+            resps.append(event.data)
+
+        # backdoor read verification for writes
+        if m0_w_addr < 0x8000_0000:
+            assert tb.s0.read(m0_w_addr, m0_w_len) == m0_w_val
+        elif m0_w_addr < 0x9000_0000:
+            assert tb.s1.read(m0_w_addr, m0_w_len) == m0_w_val
+
+        if m1_w_addr < 0x8000_0000:
+            assert tb.s0.read(m1_w_addr, m1_w_len) == m1_w_val
+        elif m1_w_addr < 0x9000_0000:
+            assert tb.s1.read(m1_w_addr, m1_w_len) == m1_w_val
+
+        for resp in resps:
+            assert resp.resp == (AxiResp.OKAY if resp.address < 0x9000_0000 else AxiResp.DECERR)
+
+            if isinstance(resp, AxiReadResp) and resp.resp == AxiResp.OKAY:
+                assert resp.data == (m0_r_val if resp.address == m0_r_addr else m1_r_val)

@@ -7,7 +7,16 @@ module axi_crossbar #(
     parameter STRB_WIDTH = (DATA_WIDTH/8),
     parameter NUM_MASTERS = 2,
     parameter NUM_SLAVES = 2,
-    parameter MAX_OUTSTANDING_TX = 8
+    parameter MAX_OUTSTANDING_TX = 8,
+
+    // Slave addresses
+    parameter [ADDR_WIDTH-1:0] SLAVE_BASE_ADDR [NUM_SLAVES-1:0] = '{32'h80000000, 32'h00000000},
+    parameter [ADDR_WIDTH-1:0] SLAVE_ADDR_MASK [NUM_SLAVES-1:0] = '{32'hF0000000, 32'h80000000}
+
+    /*
+    Slave 0: 0x0000_0000 -> 0x7FFF_FFFF
+    Slave 1: 0x8000_0000 -> 0x8FFF_FFFF
+    */
 ) (
     input  logic clk, n_rst,
 
@@ -88,12 +97,7 @@ module axi_crossbar #(
     logic [NUM_MASTERS-1:0] r_m_last_mux;
 
     // Slave Addresses
-    localparam [ADDR_WIDTH-1:0] SLAVE_BASE_ADDR [NUM_SLAVES-1:0] = '{
-        32'h80000000, 32'h00000000
-    };
-    localparam [ADDR_WIDTH-1:0] SLAVE_ADDR_MASK [NUM_SLAVES-1:0] = '{
-        32'h80000000, 32'h80000000
-    };
+    
 
     // ========== SKID BUFFERS ========== //
     // Forward path
@@ -188,28 +192,33 @@ module axi_crossbar #(
     // Reverse path
     logic [NUM_MASTERS-1:0] decerr_b_valid;
     logic [NUM_MASTERS-1:0] decerr_r_valid;
+    logic [PAYLOAD_WIDTH_B-1:0] decerr_b_payload [NUM_MASTERS-1:0];
+    logic [PAYLOAD_WIDTH_R-1:0] decerr_r_payload [NUM_MASTERS-1:0];
     logic [ID_WIDTH-1:0] decerr_b_id [NUM_MASTERS-1:0];
     logic [ID_WIDTH-1:0] decerr_r_id [NUM_MASTERS-1:0];
     logic [RESP_WIDTH-1:0] decerr_b_resp [NUM_MASTERS-1:0];
     logic [RESP_WIDTH-1:0] decerr_r_resp [NUM_MASTERS-1:0];
     logic [NUM_MASTERS-1:0] decerr_r_last;
-    logic [PAYLOAD_WIDTH_B-1:0] decerr_b_payload [NUM_MASTERS-1:0];
-    logic [PAYLOAD_WIDTH_R-1:0] decerr_r_payload [NUM_MASTERS-1:0];
 
+    logic [NUM_MASTERS-1:0] decerr_handled_b_m_valid;
+    logic [NUM_MASTERS-1:0] decerr_handled_r_m_valid;
     logic [PAYLOAD_WIDTH_B-1:0] decerr_handled_b_m_payload [NUM_MASTERS-1:0];
     logic [PAYLOAD_WIDTH_R-1:0] decerr_handled_r_m_payload [NUM_MASTERS-1:0];
-    logic [NUM_MASTERS-1:0] decerr_handled_b_m_valid [NUM_MASTERS-1:0];
-    logic [NUM_MASTERS-1:0] decerr_handled_r_m_valid [NUM_MASTERS-1:0];
+    logic [ID_WIDTH-1:0] decerr_handled_b_id [NUM_MASTERS-1:0];
+    logic [ID_WIDTH-1:0] decerr_handled_r_id [NUM_MASTERS-1:0];
+    logic [RESP_WIDTH-1:0] decerr_handled_b_resp [NUM_MASTERS-1:0];
+    logic [RESP_WIDTH-1:0] decerr_handled_r_resp [NUM_MASTERS-1:0];
+    logic [NUM_MASTERS-1:0] decerr_handled_r_last;
 
     always_comb begin
-        for (int m_idx = 0; m_idx < NUM_MASTERS; m_idx++) begin
-            decerr_b_payload[m_idx] = {decerr_b_id[m_idx], decerr_b_resp[m_idx]};
-            decerr_r_payload[m_idx] = {decerr_r_id[m_idx], 32'd0, decerr_r_resp[m_idx], decerr_r_last[m_idx]};
+        for (int i = 0; i < NUM_MASTERS; i++) begin
+            decerr_b_payload[i] = {decerr_b_id[i], decerr_b_resp[i]};
+            decerr_r_payload[i] = {decerr_r_id[i], 32'd0, decerr_r_resp[i], decerr_r_last[i]};
 
-            decerr_handled_b_m_payload[m_idx] = decerr_aw_grant[m_idx] ? decerr_b_payload[m_idx] : b_m_payload_mux[m_idx];
-            decerr_handled_r_m_payload[m_idx] = decerr_ar_grant[m_idx] ? decerr_r_payload[m_idx] : r_m_payload_mux[m_idx];
-            decerr_handled_b_m_valid[m_idx]   = decerr_aw_grant[m_idx] ? decerr_b_valid[m_idx]   : b_m_valid_mux[m_idx];
-            decerr_handled_r_m_valid[m_idx]   = decerr_ar_grant[m_idx] ? decerr_r_valid[m_idx]   : r_m_valid_mux[m_idx];
+            decerr_handled_b_m_valid[i]   = decerr_aw_grant[i] ? decerr_b_valid[i]   : b_m_valid_mux[i];
+            decerr_handled_r_m_valid[i]   = decerr_ar_grant[i] ? decerr_r_valid[i]   : r_m_valid_mux[i];
+            decerr_handled_b_m_payload[i] = decerr_aw_grant[i] ? decerr_b_payload[i] : b_m_payload_mux[i];
+            decerr_handled_r_m_payload[i] = decerr_ar_grant[i] ? decerr_r_payload[i] : r_m_payload_mux[i];
         end
     end
 
