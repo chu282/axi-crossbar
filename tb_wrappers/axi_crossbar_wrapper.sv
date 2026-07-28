@@ -4,7 +4,6 @@ module axi_crossbar_wrapper #(
     parameter ADDR_WIDTH = 32,
     parameter DATA_WIDTH = 32,
     parameter ID_WIDTH = 4,
-    parameter STRB_WIDTH = (DATA_WIDTH/8),
     parameter NUM_MASTERS = 2,
     parameter NUM_SLAVES = 2,
     parameter MAX_OUTSTANDING_TX = 8,
@@ -148,11 +147,13 @@ module axi_crossbar_wrapper #(
     output logic                  s1_rready
 );
 
+    localparam STRB_WIDTH = DATA_WIDTH / 8;
+
     // Interfaces
-    axi_if #(.ADDR_WIDTH(ADDR_WIDTH), .DATA_WIDTH(DATA_WIDTH), .ID_WIDTH(ID_WIDTH), .STRB_WIDTH(STRB_WIDTH))
-            m[NUM_MASTERS-1:0] (clk, n_rst);
-    axi_if #(.ADDR_WIDTH(ADDR_WIDTH), .DATA_WIDTH(DATA_WIDTH), .ID_WIDTH(ID_WIDTH), .STRB_WIDTH(STRB_WIDTH))
-            s[NUM_SLAVES-1:0] (clk, n_rst);
+    axi_if #(.ADDR_WIDTH(ADDR_WIDTH), .DATA_WIDTH(DATA_WIDTH), .ID_WIDTH(ID_WIDTH))
+            m[NUM_MASTERS-1:0] ();
+    axi_if #(.ADDR_WIDTH(ADDR_WIDTH), .DATA_WIDTH(DATA_WIDTH), .ID_WIDTH(ID_WIDTH))
+            s[NUM_SLAVES-1:0] ();
 
     // m0 if ports
     assign m[0].awaddr  = m0_awaddr;
@@ -294,7 +295,6 @@ module axi_crossbar_wrapper #(
         .ADDR_WIDTH(ADDR_WIDTH),
         .DATA_WIDTH(DATA_WIDTH),
         .ID_WIDTH(ID_WIDTH),
-        .STRB_WIDTH(STRB_WIDTH),
         .SLAVE_BASE_ADDR(SLAVE_BASE_ADDR),
         .SLAVE_ADDR_MASK(SLAVE_ADDR_MASK)
     ) dut (.*);

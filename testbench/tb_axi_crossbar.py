@@ -5,15 +5,15 @@ import warnings
 
 from cocotb.clock import Clock
 from cocotb.triggers import FallingEdge
-from cocotbext.axi import AxiBus, AxiMaster, AxiRam, AxiResp
 from cocotbext.axi.axi_master import AxiReadResp
+from cocotbext.axi import AxiBus, AxiMaster, AxiRam, AxiResp
 
 ADDR_WIDTH = 32
 ID_WIDTH = 4
 NUM_MASTERS = 2
 NUM_SLAVES = 2
 
-logging.getLogger("cocotb").setLevel(logging.INFO)
+logging.getLogger("cocotb").setLevel(logging.WARNING)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 class TB:
@@ -87,7 +87,7 @@ async def test_single_write(dut):
     tb = TB(dut)
     await tb.reset()
 
-    addrs, lengths, data, sizes = get_rand_parameters(NUM_TESTS)
+    addrs, lengths, data, sizes, _ = get_rand_parameters(NUM_TESTS)
 
     # write tests
     dut._log.info("---- Single transaction write tests ----")
@@ -117,7 +117,7 @@ async def test_single_read(dut):
     tb = TB(dut)
     await tb.reset()
 
-    addrs, lengths, data, sizes = get_rand_parameters(NUM_TESTS)
+    addrs, lengths, data, sizes, _ = get_rand_parameters(NUM_TESTS)
 
     # read tests
     dut._log.info("---- Single transaction read tests ----")
@@ -145,8 +145,8 @@ async def test_multiple_non_conflicting_transactions(dut):
     tb = TB(dut)
     await tb.reset()
 
-    s0_addrs, lengths, s0_data, sizes = get_rand_parameters(NUM_TESTS, 0x7FFF_FFFF)
-    s1_addrs, _, _, _ = get_rand_parameters(NUM_TESTS, 0x0FFF_FFFF)
+    s0_addrs, lengths, s0_data, sizes, _ = get_rand_parameters(NUM_TESTS, 0x7FFF_FFFF)
+    s1_addrs, _, _, _, _ = get_rand_parameters(NUM_TESTS, 0x0FFF_FFFF)
     s1_addrs = [addr + 0x8000_0000 for addr in s1_addrs]
     s1_data = [random.randbytes(length) for length in lengths]
 
@@ -198,8 +198,8 @@ async def test_multiple_conflicting_transactions(dut):
     tb = TB(dut)
     await tb.reset()
 
-    s0_addrs, lengths, s0_data, sizes = get_rand_parameters(NUM_TESTS, 0x8000_0000)
-    s1_addrs, _, _, _ = get_rand_parameters(NUM_TESTS, 0x1000_0000)
+    s0_addrs, lengths, s0_data, sizes, _ = get_rand_parameters(NUM_TESTS, 0x8000_0000)
+    s1_addrs, _, _, _, _ = get_rand_parameters(NUM_TESTS, 0x1000_0000)
     s1_addrs = [addr + 0x8000_0000 for addr in s1_addrs]
     s1_data = [random.randbytes(length) for length in lengths]
 
@@ -246,7 +246,7 @@ async def test_decerr(dut):
     tb = TB(dut)
     await tb.reset()
 
-    _, lengths, data, sizes = get_rand_parameters(NUM_TESTS)
+    _, lengths, data, sizes, _ = get_rand_parameters(NUM_TESTS)
     
     addrs = []
     for _ in range(NUM_TESTS):

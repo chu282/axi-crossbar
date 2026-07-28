@@ -4,7 +4,6 @@ module axi_crossbar #(
     parameter ADDR_WIDTH = 32,
     parameter DATA_WIDTH = 32,
     parameter ID_WIDTH = 4,
-    parameter STRB_WIDTH = (DATA_WIDTH/8),
     parameter NUM_MASTERS = 2,
     parameter NUM_SLAVES = 2,
     parameter MAX_OUTSTANDING_TX = 8,
@@ -24,6 +23,8 @@ module axi_crossbar #(
     axi_if.master s [NUM_SLAVES-1:0],
     axi_if.slave m [NUM_MASTERS-1:0]
 );
+
+    localparam STRB_WIDTH = DATA_WIDTH / 8;
 
     // widths
     localparam LEN_WIDTH   = 8;

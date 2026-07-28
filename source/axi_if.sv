@@ -1,11 +1,10 @@
 interface axi_if #(
     parameter ADDR_WIDTH = 32,
     parameter DATA_WIDTH = 32,
-    parameter ID_WIDTH = 4,
-    parameter STRB_WIDTH = (DATA_WIDTH/8)
-) (
-    input logic clk, n_rst
-);
+    parameter ID_WIDTH = 4
+) ();
+
+    localparam STRB_WIDTH = DATA_WIDTH / 8;
 
     // AW Channel
     logic [ADDR_WIDTH-1:0] awaddr;
