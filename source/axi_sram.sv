@@ -111,7 +111,7 @@ module axi_sram #(
         endcase
     end
 
-    always_comb begin : output_logic
+    always_comb begin : axi_logic
         s.awready = 0;
         s.wready = 0;
 

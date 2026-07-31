@@ -43,7 +43,11 @@ module axi_sram_wrapper #(
 
     int test;
 
-    axi_if #(.ADDR_WIDTH(ADDR_WIDTH), .DATA_WIDTH(DATA_WIDTH), .ID_WIDTH(ID_WIDTH)) s ();
+    axi_if #(
+        .ADDR_WIDTH(ADDR_WIDTH), 
+        .DATA_WIDTH(DATA_WIDTH), 
+        .ID_WIDTH(ID_WIDTH)
+    ) s ();
 
     assign s.awaddr = awaddr;
     assign s.awid = awid;
