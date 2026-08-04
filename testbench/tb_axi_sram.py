@@ -30,7 +30,6 @@ async def test_axi_sram(dut):
     dut.n_rst.value = 0
     await FallingEdge(dut.clk)
     dut.n_rst.value = 1
-    await FallingEdge(dut.clk)
 
     log.info("---- Simple write operation ----")
     dut.test.value = 1

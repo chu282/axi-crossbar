@@ -10,8 +10,7 @@ module dma_csr #(
     axi_if.slave s,
 
     input  logic [1:0] status,
-    input  logic [1:0] err,
-    output logic start, stop,
+    output logic start, stop, ack_done, ack_err,
     output logic [31:0] length,
     output logic [ADDR_WIDTH-1:0] from_addr, to_addr
 );
@@ -38,7 +37,6 @@ module dma_csr #(
     logic [STRB_WIDTH-1:0] reg_wstrb;
 
     logic [1:0] bresp, rresp;
-    logic rlast;
     logic [DATA_WIDTH-1:0] rdata;
     
     always_ff @(posedge clk, negedge n_rst) begin : state_ff
@@ -116,7 +114,7 @@ module dma_csr #(
             end
             R_READ: begin
                 s.rid = reg_arid;
-                s.rlast = rlast;
+                s.rlast = 1;
                 s.rvalid = 1;
                 s.rdata = rdata;
                 s.rresp = rresp;
@@ -151,19 +149,20 @@ module dma_csr #(
 
     logic [ADDR_WIDTH-1:0] next_from_addr, next_to_addr;
     logic [31:0] next_length;
-    logic [1:0] next_control;
-    logic [1:0] next_bresp, next_rresp;
-    logic next_start, next_stop;
-    
+    logic next_start, next_stop, next_ack_done, next_ack_err;
+
     always_comb begin : csr_logic
         w_mask = 0;
 
         next_from_addr = from_addr;
         next_to_addr = to_addr;
         next_length = length;
-        next_control = 0;
-        next_bresp = OKAY;
-        next_rresp = OKAY;
+        bresp = OKAY;
+        rresp = OKAY;
+        next_start = 0;
+        next_stop = 0;
+        next_ack_done = 0;
+        next_ack_err = 0;
 
         // write
         if (write_state == W_WRITE && s.wvalid) begin
@@ -183,20 +182,25 @@ module dma_csr #(
                     next_length = (length & ~w_mask) | masked_data;
                 end
                 12'hC: begin
-                    next_control[0] = ~start & masked_data[0];
-                    next_control[1] = ~stop & masked_data[1];
-                end
-                default: begin
-                    next_bresp = SLVERR;
+                    next_start = ~start & masked_data[0];
+                    next_stop = ~stop & masked_data[1];
+                    next_ack_done = ~ack_done & masked_data[2];
+                    next_ack_err = ~ack_err & masked_data[3];
                 end
             endcase
         end
 
+        // write response
+        if (write_state == W_RESP) begin
+            bresp = OKAY;
+            if (reg_awaddr >= 12'h10) bresp = SLVERR;
+        end
+
         // read
-        if (read_state == R_READ && s.arvalid) begin
+        if (read_state == R_READ) begin
             case (reg_araddr)
-                12'hD: rdata = {30'd0, status};
-                default: next_rresp = SLVERR;
+                12'h10: rdata = {30'd0, status};
+                default: rresp = SLVERR;
             endcase
         end
     end
@@ -208,8 +212,8 @@ module dma_csr #(
             length <= 0;
             start <= 0;
             stop <= 0;
-            rresp <= OKAY;
-            bresp <= OKAY;
+            ack_done <= 0;
+            ack_err <= 0;
         end
         else begin
             from_addr <= next_from_addr;
@@ -217,8 +221,8 @@ module dma_csr #(
             length <= next_length;
             start <= next_start;
             stop <= next_stop;
-            rresp <= next_rresp;
-            bresp <= next_bresp;
+            ack_done <= next_ack_done;
+            ack_err <= next_ack_err;
         end
     end
 
