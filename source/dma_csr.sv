@@ -10,7 +10,7 @@ module dma_csr #(
     axi_if.slave s,
 
     input  logic [1:0] status,
-    output logic start, stop, ack_done, ack_err,
+    output logic start, ack_done, ack_err,
     output logic [31:0] length,
     output logic [ADDR_WIDTH-1:0] from_addr, to_addr
 );
@@ -149,7 +149,7 @@ module dma_csr #(
 
     logic [ADDR_WIDTH-1:0] next_from_addr, next_to_addr;
     logic [31:0] next_length;
-    logic next_start, next_stop, next_ack_done, next_ack_err;
+    logic next_start, next_ack_done, next_ack_err;
 
     always_comb begin : csr_logic
         w_mask = 0;
@@ -160,7 +160,6 @@ module dma_csr #(
         bresp = OKAY;
         rresp = OKAY;
         next_start = 0;
-        next_stop = 0;
         next_ack_done = 0;
         next_ack_err = 0;
 
@@ -183,7 +182,6 @@ module dma_csr #(
                 end
                 12'hC: begin
                     next_start = ~start & masked_data[0];
-                    next_stop = ~stop & masked_data[1];
                     next_ack_done = ~ack_done & masked_data[2];
                     next_ack_err = ~ack_err & masked_data[3];
                 end
@@ -211,7 +209,6 @@ module dma_csr #(
             to_addr <= 0;
             length <= 0;
             start <= 0;
-            stop <= 0;
             ack_done <= 0;
             ack_err <= 0;
         end
@@ -220,7 +217,6 @@ module dma_csr #(
             to_addr <= next_to_addr;
             length <= next_length;
             start <= next_start;
-            stop <= next_stop;
             ack_done <= next_ack_done;
             ack_err <= next_ack_err;
         end

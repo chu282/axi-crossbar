@@ -24,13 +24,12 @@ async def test_dma_csr(dut):
     n_rst = dut.n_rst
     clk = dut.clk
     test = dut.test
+    
     status = dut.status
-
     from_addr = dut.from_addr
     to_addr = dut.to_addr
     length = dut.length
     start = dut.start
-    stop = dut.stop
 
     status.value = 0
 
@@ -100,7 +99,6 @@ async def test_dma_csr(dut):
     exp_to_addr = 0
     exp_length = 0
     exp_start = 0
-    exp_stop = 0
 
     for i in range(NUM_TESTS):
         addr = random.randrange(0, 0x100, 4)
@@ -109,10 +107,9 @@ async def test_dma_csr(dut):
 
         if write:
             exp_start = int.from_bytes(val, "little") & 1
-            exp_stop = (int.from_bytes(val, "little") >> 1) & 1
             exp_ack_done = (int.from_bytes(val, "little") >> 2) & 1
             exp_ack_err = (int.from_bytes(val, "little") >> 3) & 1
-            if addr == 0xC: cocotb.start_soon(check_pulses(dut, exp_start, exp_stop, exp_ack_done, exp_ack_err))
+            if addr == 0xC: cocotb.start_soon(check_pulses(dut, exp_start, exp_ack_done, exp_ack_err))
             resp = await m.write(addr, val)
             exp_resp = AxiResp.SLVERR if addr >= 0x10 else AxiResp.OKAY
 
@@ -131,19 +128,17 @@ async def test_dma_csr(dut):
         assert to_addr.value == exp_to_addr
         assert length.value == exp_length
 
-async def check_pulses(dut, exp_start, exp_stop, exp_ack_done, exp_ack_err):
+async def check_pulses(dut, exp_start, exp_ack_done, exp_ack_err):
     # wait until a cycle after write finishes
     while not dut.wvalid.value or not dut.wready.value: await FallingEdge(dut.clk)
     await FallingEdge(dut.clk)
 
     assert dut.start.value == exp_start
-    assert dut.stop.value == exp_stop
     assert dut.ack_done.value == exp_ack_done
     assert dut.ack_err.value == exp_ack_err
 
     # ensure one cycle pulses
     await FallingEdge(dut.clk)
     assert dut.start.value == 0
-    assert dut.stop.value == 0
     assert dut.ack_done.value == 0
     assert dut.ack_err.value == 0

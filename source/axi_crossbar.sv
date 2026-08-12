@@ -97,9 +97,6 @@ module axi_crossbar #(
     logic [PAYLOAD_WIDTH_R-1:0] r_m_payload_mux [NUM_MASTERS-1:0];
     logic [NUM_MASTERS-1:0] r_m_last_mux;
 
-    // Slave Addresses
-    
-
     // ========== SKID BUFFERS ========== //
     // Forward path
     logic [NUM_MASTERS-1:0] decerr_handled_aw_m_ready;

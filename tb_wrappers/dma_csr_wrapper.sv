@@ -8,7 +8,7 @@ module dma_csr_wrapper #(
     input  logic clk, n_rst,
 
     input  logic [1:0] status,
-    output logic start, stop, ack_done, ack_err,
+    output logic start, ack_done, ack_err,
     output logic [31:0] length,
     output logic [ADDR_WIDTH-1:0] from_addr, to_addr,
 
