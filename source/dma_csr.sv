@@ -182,8 +182,8 @@ module dma_csr #(
                 end
                 12'hC: begin
                     next_start = ~start & masked_data[0];
-                    next_ack_done = ~ack_done & masked_data[2];
-                    next_ack_err = ~ack_err & masked_data[3];
+                    next_ack_done = ~ack_done & masked_data[1];
+                    next_ack_err = ~ack_err & masked_data[2];
                 end
             endcase
         end

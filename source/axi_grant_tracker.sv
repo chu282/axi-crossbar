@@ -23,7 +23,9 @@ module axi_grant_tracker #(
         .pop(tf_finished),
         .out(o_grant),
         .full(full), 
-        .empty(), .*
+        .empty(),
+        .count(), .*
     );
+    /* verilator lint_on PINCONNECTEMPTY */
 
 endmodule

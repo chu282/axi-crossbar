@@ -2,15 +2,16 @@
 
 module axi_fifo #(
     parameter DEPTH = 8,
-    parameter WIDTH = 8
+    parameter WIDTH = 8,
+    parameter PTR_WIDTH = $clog2(DEPTH)
 ) (
     input  logic clk, n_rst, push, pop, 
     input  logic [WIDTH-1:0] in,
     output logic full, empty,
-    output logic [WIDTH-1:0] out
+    output logic [WIDTH-1:0] out,
+    output logic [PTR_WIDTH:0] count
 );
 
-    parameter PTR_WIDTH = $clog2(DEPTH);
     logic [DEPTH-1:0][WIDTH-1:0] fifo;
     logic [DEPTH-1:0][WIDTH-1:0] next_fifo;
     logic [PTR_WIDTH:0] ptr, next_ptr;
@@ -52,5 +53,6 @@ module axi_fifo #(
     assign full = (ptr == DEPTH);
     assign empty = (ptr == 0);
     assign out = fifo[0];
+    assign count = ptr;
 
 endmodule

@@ -16,7 +16,7 @@ module dma_engine #(
 
     typedef enum logic [2:0] {
         IDLE,
-        TRANS,
+        BUSY,
         DONE,
         ERR
     } dma_state_e;
@@ -30,7 +30,7 @@ module dma_engine #(
     localparam OKAY = 2'b00; // AXI response
     localparam INCR = 2'b01; // AXI burst
 
-    localparam MAX_TRANS_SIZE = 4 * 256;
+    localparam MAX_TRANS_SIZE = 11'h400;
 
     dma_state_e dma_state, next_dma_state;
 
@@ -41,8 +41,10 @@ module dma_engine #(
     logic [31:0] reg_from_addr, reg_to_addr, reg_length;
     logic [31:0] fifo_buf;
 
-    logic w_first_trans, w_first_byte;
-    logic r_first_trans, r_first_byte, next_r_first_byte;
+    logic w_first_trans;
+    logic r_first_trans, r_first_byte;
+
+    logic needs_flush;
 
     logic [ADDR_WIDTH-1:0] next_awaddr, next_araddr;
     logic [7:0] next_awlen, next_arlen;
@@ -55,6 +57,8 @@ module dma_engine #(
 
     logic [DATA_WIDTH-1:0] fifo_in, fifo_out;
     logic fifo_push, fifo_pop, fifo_full, fifo_empty;
+    parameter FIFO_PTR_WIDTH = $clog2(FIFO_DEPTH);
+    logic [FIFO_PTR_WIDTH:0] fifo_count;
 
     axi_fifo #(
         .DEPTH(FIFO_DEPTH),
@@ -67,7 +71,8 @@ module dma_engine #(
         .in(fifo_in),
         .full(fifo_full),
         .empty(fifo_empty),
-        .out(fifo_out)
+        .out(fifo_out),
+        .count(fifo_count)
     );
 
     always_ff @(posedge clk, negedge n_rst) begin : fsm_regs
@@ -89,9 +94,9 @@ module dma_engine #(
         case (dma_state)
             IDLE: begin
                 if (trans_err) next_dma_state = ERR;
-                else if (start) next_dma_state = TRANS;
+                else if (start) next_dma_state = BUSY;
             end
-            TRANS: begin
+            BUSY: begin
                 if (transfer_done) begin
                     if (slave_err) next_dma_state = ERR;
                     else next_dma_state = DONE;
@@ -110,7 +115,7 @@ module dma_engine #(
     always_comb begin : output_logic
         case (dma_state)
             IDLE: status = STATUS_IDLE;
-            TRANS: status = STATUS_BUSY;
+            BUSY: status = STATUS_BUSY;
             DONE: status = STATUS_DONE;
             ERR: status = STATUS_ERR;
             default: status = STATUS_ERR;
@@ -123,7 +128,6 @@ module dma_engine #(
             m.awlen <= 0;
             m.awvalid <= 0;
 
-            m.wdata <= 0;
             m.wstrb <= 0;
             m.wlast <= 0;
             m.wvalid <= 0;
@@ -140,7 +144,6 @@ module dma_engine #(
             m.awlen <= next_awlen;
             m.awvalid <= next_awvalid;
 
-            m.wdata <= next_wdata;
             m.wstrb <= next_wstrb;
             m.wlast <= next_wlast;
             m.wvalid <= next_wvalid;
@@ -165,6 +168,11 @@ module dma_engine #(
 
     logic [31:0] w_bytes_left;
     logic [31:0] r_bytes_left;
+    logic [10:0] w_burst_bytes;
+    logic [10:0] r_burst_bytes;
+    logic [31:0] w_rem_start;
+    
+    assign w_rem_start = length - (32'(MAX_TRANS_SIZE) - 32'(to_addr[9:0]));
 
     logic [5:0] offset_diff;
     logic [31:0] next_fifo_buf;
@@ -172,7 +180,12 @@ module dma_engine #(
     logic [7:0] beat_count, next_beat_count;
     logic [STRB_WIDTH-1:0] start_strb, end_strb;
 
-    logic fifo_flush;
+    logic fifo_buf_flush;
+    logic is_last_r_burst;
+    logic is_last_w_burst, next_is_last_w_burst;
+    logic next_is_first_beat, next_is_last_beat;
+
+    logic [2:0] num_resps;
 
     always_comb begin : axi_logic
         // hardcoded signals
@@ -185,10 +198,9 @@ module dma_engine #(
 
         next_awaddr = m.awaddr;
         next_awlen = m.awlen;
-        next_awvalid = 0;
+        next_awvalid = m.awvalid;
 
-        next_wdata = 0;
-        next_wstrb = 0;
+        next_wstrb = m.wstrb;
         next_wlast = 0;
         next_wvalid = 0;
 
@@ -200,13 +212,13 @@ module dma_engine #(
         next_rready = 0;
 
         trans_err = 0;
-        next_slave_err = 0;
+        next_slave_err = slave_err;
         last_read_tx = 0;
 
         fifo_in = 0;
         fifo_push = 0;
         fifo_pop = 0;
-        next_fifo_buf = 0;
+        next_fifo_buf = fifo_buf;
         next_fifo_push = 0;
         w_last_byte = 0;
         r_bytes_left = 0;
@@ -215,6 +227,7 @@ module dma_engine #(
         w_byte_offset = 0;
         next_w_bytes_transferred = 0;
         transfer_done = 0;
+        m.wdata = fifo_out;
 
         r_start_word = 0;
         r_end_word = 0;
@@ -225,105 +238,65 @@ module dma_engine #(
         end_strb = 0;
         offset_diff = 0;
         next_beat_count = beat_count;
+        is_last_w_burst = 0;
+        next_is_last_w_burst = 0;
+        is_last_r_burst = 0;
+        next_is_first_beat = 0;
+        next_is_last_beat = 0;
+        w_burst_bytes = 0;
+        r_burst_bytes = 0;
 
         case (dma_state)
             IDLE: begin
                 if (start) begin
-                    // check if transaction goes across 4KB boundary
-                    if (to_addr[11:0] + length[11:0] > 13'h1000 || from_addr[11:0] + length[11:0] > 13'h1000)
-                        trans_err = 1;
-                    // check if from/to memory chunks overlap
+                    // check if from/to memory chunks overlap or invalid length
                     if ((to_addr > from_addr && to_addr < from_addr + length) ||
                         (to_addr < from_addr && from_addr < to_addr + length) ||
-                        (to_addr == from_addr))
+                        (to_addr == from_addr) ||
+                        (length == 0))
                         trans_err = 1;
+                        
+                    next_fifo_buf = 0;
                 end
+                next_slave_err = 0;
             end
-            TRANS: begin
+            BUSY: begin
                 r_byte_offset = reg_from_addr[1:0];
                 w_byte_offset = reg_to_addr[1:0];
-
-                // AW
                 w_bytes_left = reg_to_addr + reg_length - m.awaddr;
-
-                if (w_first_trans) begin
-                    next_awaddr = reg_to_addr;
-                    next_awvalid = 1;
-                end
-                else if (m.wvalid && m.wready && m.wlast && w_bytes_left > MAX_TRANS_SIZE) begin
-                    next_awaddr = m.awaddr + MAX_TRANS_SIZE;
-                    next_awvalid = 1;
-                end
-
-                if (m.awvalid && m.awready)
-                    next_awvalid = 0;
-
-                w_start_word = next_awaddr >> 2;
-                if (reg_to_addr + reg_length - next_awaddr < MAX_TRANS_SIZE) // next transfer is the last one
-                    w_end_word = (reg_to_addr + reg_length - 1) >> 2;
-                else // next transfer is not the last one
-                    w_end_word = (next_awaddr + MAX_TRANS_SIZE - 1) >> 2;
-                next_awlen = 8'(w_end_word - w_start_word);
-
-                // W
-                next_wvalid = ~fifo_empty;
-                next_wdata = fifo_out;
-                if (m.wready && m.wvalid) begin
-                    fifo_pop = 1;
-                    if (m.wlast)
-                        next_beat_count = 0;
-                    else 
-                        next_beat_count = beat_count + 1;
-                end
-
-                next_wlast = beat_count == m.awlen;
-                w_last_byte = m.awaddr[1:0] + ((m.awlen[1:0] + 1'b1) << m.awsize[1:0]) - 1'b1;
-                start_strb = {STRB_WIDTH{1'b1}} << w_byte_offset;
-                end_strb = {STRB_WIDTH{1'b1}} >> (3 - w_last_byte);
-
-                if (w_first_byte && next_wlast)
-                    next_wstrb = start_strb & end_strb;
-                else if (w_first_byte)
-                    next_wstrb = start_strb;
-                else if (next_wlast)
-                    next_wstrb = end_strb;
-                else
-                    next_wstrb = {STRB_WIDTH{1'b1}};
-
-                // B
-                next_bready = 1;
-                if (m.bvalid && m.bready) begin
-                    if (m.bresp != OKAY)
-                        next_slave_err = 1;
-                    if (w_bytes_left < MAX_TRANS_SIZE)
-                        transfer_done = 1;
-                end
+                is_last_w_burst = (w_bytes_left <= 32'(MAX_TRANS_SIZE - m.awaddr[9:0]));
 
                 // AR
                 r_bytes_left = reg_from_addr + reg_length - m.araddr;
+                is_last_r_burst = (r_bytes_left <= 32'(MAX_TRANS_SIZE - m.araddr[9:0]));
 
                 if (r_first_trans) begin
                     next_araddr = reg_from_addr;
                     next_arvalid = 1;
                 end
-                else if (m.rvalid && m.rready && m.rlast && r_bytes_left > MAX_TRANS_SIZE) begin
-                    next_araddr = m.araddr + MAX_TRANS_SIZE;
+                else if (m.rvalid && m.rready && m.rlast && !is_last_r_burst) begin
+                    next_araddr = m.araddr + ADDR_WIDTH'(MAX_TRANS_SIZE - m.araddr[9:0]);
                     next_arvalid = 1;
                 end
+
+                r_burst_bytes = MAX_TRANS_SIZE - next_araddr[9:0];
 
                 if (m.arvalid && m.arready)
                     next_arvalid = 0;
 
                 r_start_word = next_araddr >> 2;
-                if (reg_from_addr + reg_length - next_araddr < MAX_TRANS_SIZE) // next transfer is the last one
+                if (reg_from_addr + reg_length - next_araddr <= 32'(MAX_TRANS_SIZE - next_araddr[9:0]))
                     r_end_word = (reg_from_addr + reg_length - 1) >> 2;
-                else // next transfer is not the last one
-                    r_end_word = (next_araddr + MAX_TRANS_SIZE - 1) >> 2;
+                else
+                    r_end_word = (next_araddr + ADDR_WIDTH'(r_burst_bytes - 1)) >> 2;
                 next_arlen = 8'(r_end_word - r_start_word);
 
                 // R
-                next_rready = ~fifo_full;
+                next_rready = (fifo_count < (FIFO_DEPTH - 1)) || fifo_pop;
                 if (m.rvalid && m.rready) begin
+                    if (m.rresp != OKAY)
+                        next_slave_err = 1;
+
                     if (r_byte_offset > w_byte_offset) begin // araddr starts at higher byte lane than awaddr
                         offset_diff = 5'(r_byte_offset - w_byte_offset) * 8;
                         next_fifo_buf = m.rdata >> offset_diff;
@@ -341,8 +314,78 @@ module dma_engine #(
                         fifo_push = 1;
                     end
                 end
-                if (fifo_flush)
+
+                if (fifo_buf_flush) begin
+                    fifo_in = fifo_buf;
                     fifo_push = 1;
+                end
+
+                // AW
+                if (w_first_trans) begin
+                    next_awaddr = reg_to_addr;
+                    next_awvalid = 1;
+                end
+                else if (m.wvalid && m.wready && m.wlast && !is_last_w_burst) begin
+                    next_awaddr = m.awaddr + ADDR_WIDTH'(MAX_TRANS_SIZE - m.awaddr[9:0]);
+                    next_awvalid = 1;
+                end
+
+                w_burst_bytes = MAX_TRANS_SIZE - next_awaddr[9:0];
+
+                if (m.awvalid && m.awready)
+                    next_awvalid = 0;
+
+                w_start_word = next_awaddr >> 2;
+                if (reg_to_addr + reg_length - next_awaddr <= 32'(MAX_TRANS_SIZE - next_awaddr[9:0])) // next transfer is the last one
+                    w_end_word = (reg_to_addr + reg_length - 1) >> 2;
+                else // next transfer is not the last one
+                    w_end_word = (next_awaddr + ADDR_WIDTH'(w_burst_bytes - 1)) >> 2;
+                next_awlen = 8'(w_end_word - w_start_word);
+
+                // W
+                if (m.wready && m.wvalid) begin
+                    fifo_pop = 1;
+                    if (m.wlast)
+                        next_beat_count = 0;
+                    else 
+                        next_beat_count = beat_count + 1;
+                end
+
+                case ({fifo_push, fifo_pop})
+                    2'b11: next_wvalid = fifo_count != 0;
+                    2'b10: next_wvalid = 1'b1;
+                    2'b01: next_wvalid = fifo_count > 1;
+                    2'b00: next_wvalid = fifo_count != 0;
+                endcase
+
+                next_wlast = (next_beat_count == next_awlen) && next_wvalid;
+                w_last_byte = 2'(reg_to_addr + reg_length - 1);
+
+                // wstrb
+                start_strb = {STRB_WIDTH{1'b1}} << w_byte_offset;
+                end_strb = {STRB_WIDTH{1'b1}} >> (3 - w_last_byte);
+
+                next_is_last_w_burst = (reg_to_addr + reg_length - next_awaddr <= 32'(MAX_TRANS_SIZE - next_awaddr[9:0]));
+                next_is_first_beat = (next_awaddr == reg_to_addr) && (next_beat_count == 0);
+                next_is_last_beat = next_is_last_w_burst && (next_beat_count == next_awlen);
+
+                if (next_is_first_beat && next_is_last_beat) // single beat transfer
+                    next_wstrb = start_strb & end_strb;
+                else if (next_is_first_beat) // first beat of transfer
+                    next_wstrb = start_strb;
+                else if (next_is_last_beat) // last beat of transfer
+                    next_wstrb = end_strb;
+                else // middle beats
+                    next_wstrb = {STRB_WIDTH{1'b1}};
+
+                // B
+                next_bready = 1;
+                if (m.bvalid && m.bready) begin
+                    if (m.bresp != OKAY)
+                        next_slave_err = 1;
+                    if (num_resps == 1)
+                        transfer_done = 1;
+                end
             end
             DONE: begin
             end
@@ -358,14 +401,14 @@ module dma_engine #(
             r_first_trans <= 0;
             w_first_trans <= 0;
             r_first_byte <= 0;
-            w_first_byte <= 0;
             reg_from_addr <= 0;
             reg_to_addr <= 0;
             reg_length <= 0;
             fifo_buf <= 0;
             w_bytes_transferred <= 0;
-            fifo_flush <= 0;
+            fifo_buf_flush <= 0;
             beat_count <= 0;
+            num_resps <= 0;
         end 
         else begin
             if (start) begin
@@ -375,31 +418,32 @@ module dma_engine #(
                 reg_to_addr <= to_addr;
                 reg_length <= length;
                 r_first_byte <= 1;
-                w_first_byte <= 1;
+                needs_flush <= (((to_addr + length - 1) >> 2) - (to_addr >> 2) + 1) > 
+                    ((from_addr[1:0] > to_addr[1:0]) ? ((((from_addr + length - 1) >> 2) - (from_addr >> 2) + 1) - 1) : (((from_addr + length - 1) >> 2) - (from_addr >> 2) + 1));
+                    
+                if (length <= 32'(MAX_TRANS_SIZE) - 32'(to_addr[9:0])) num_resps <= 1;
+                else if (w_rem_start <= 32'(MAX_TRANS_SIZE)) num_resps <= 2;
+                else if (w_rem_start <= 32'(MAX_TRANS_SIZE) * 2) num_resps <= 3;
+                else if (w_rem_start <= 32'(MAX_TRANS_SIZE) * 3) num_resps <= 4;
+                else num_resps <= 5;
             end
             if (m.arvalid && m.arready) r_first_trans <= 0;
-            if (m.awvalid && m.awready) w_first_trans <= 0;
+            if (m.awvalid && m.awready) begin 
+                w_first_trans <= 0;
+            end
 
-            if (m.rlast && m.rready && m.rvalid)
-                r_first_byte <= 1;
-            else if (m.rready && m.rvalid)
+            if (m.rready && m.rvalid)
                 r_first_byte <= 0;
-                
-            if (m.wlast && m.wready && m.wvalid)
-                w_first_byte <= 1;
-            else if (m.wready && m.wvalid)
-                w_first_byte <= 0;
 
             beat_count <= next_beat_count;
 
             w_bytes_transferred <= next_w_bytes_transferred;
 
-            if (m.rlast && m.rvalid && m.rready && r_byte_offset != w_byte_offset)
-                fifo_flush <= 1;
-            else
-                fifo_flush <= 0;
-
+            fifo_buf_flush <= m.rlast && m.rvalid && m.rready && is_last_r_burst && needs_flush;
             fifo_buf <= next_fifo_buf;
+
+            if (m.bvalid && m.bready)
+                num_resps <= num_resps - 1;
         end
     end
 

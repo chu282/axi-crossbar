@@ -45,5 +45,22 @@ view:
 	$(MAKE) $*_view ; \
 	exit $$RET
 
+MODULES = axi_addr_decoder \
+	axi_arbiter \
+	axi_crossbar \
+	axi_crossbar_dma \
+	axi_decerr_handler \
+	axi_fifo \
+	axi_grant_tracker \
+	axi_mux \
+	axi_skid_buffer \
+	axi_sram \
+	dma_csr \
+	dma_engine
+
+SIM_TARGETS = $(addsuffix _sim, $(MODULES))
+
+test_all: $(SIM_TARGETS)
+
 clean::
 	rm -rf sim_builds

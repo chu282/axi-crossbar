@@ -13,8 +13,10 @@ ID_WIDTH = 4
 NUM_MASTERS = 2
 NUM_SLAVES = 2
 
-logging.getLogger("cocotb").setLevel(logging.WARNING)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+log = logging.getLogger(f"cocotb.{__name__}")
+log.setLevel(logging.INFO)
 
 class TB:
     def __init__(self, dut):
@@ -43,6 +45,7 @@ class TB:
         self.slaves = [self.s0, self.s1]
 
         # Silence cocotbext-axi logging
+        logging.getLogger(f"cocotb.{dut._name}").setLevel(logging.WARNING)
         logging.getLogger(f"cocotb.{dut._name}.m0").setLevel(logging.WARNING)
         logging.getLogger(f"cocotb.{dut._name}.m1").setLevel(logging.WARNING)
         logging.getLogger(f"cocotb.{dut._name}.s0").setLevel(logging.WARNING)
@@ -249,6 +252,9 @@ async def test_decerr(dut):
     _, lengths, data, sizes, _ = get_rand_parameters(NUM_TESTS)
     
     addrs = []
+
+    # decerr tests
+    dut._log.info("---- Decerr detection tests ----")
     for _ in range(NUM_TESTS):
         addrs.append(0x1000 * random.randint(0x8_0000 - 0x2, 0x8_0000 + 0x2)) # test boundary between slaves
 
@@ -292,6 +298,8 @@ async def test_random_transactions(dut):
     m1_addrs_w, m1_lengths_w, m1_data_w, m1_sizes_w, m1_ids_w = get_rand_parameters(NUM_TESTS, MAX_ADDR=0xFFFF_FFFF)
     m1_addrs_r, m1_lengths_r, m1_data_r, m1_sizes_r, m1_ids_r = get_rand_parameters(NUM_TESTS, MAX_ADDR=0xFFFF_FFFF)
 
+    # random transactions
+    dut._log.info("---- Constrained random transaction tests ----")
     for i in range(NUM_TESTS):
         m0_w_addr = m0_addrs_w[i]
         m0_w_len = m0_lengths_w[i]

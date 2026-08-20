@@ -107,8 +107,8 @@ async def test_dma_csr(dut):
 
         if write:
             exp_start = int.from_bytes(val, "little") & 1
-            exp_ack_done = (int.from_bytes(val, "little") >> 2) & 1
-            exp_ack_err = (int.from_bytes(val, "little") >> 3) & 1
+            exp_ack_done = (int.from_bytes(val, "little") >> 1) & 1
+            exp_ack_err = (int.from_bytes(val, "little") >> 2) & 1
             if addr == 0xC: cocotb.start_soon(check_pulses(dut, exp_start, exp_ack_done, exp_ack_err))
             resp = await m.write(addr, val)
             exp_resp = AxiResp.SLVERR if addr >= 0x10 else AxiResp.OKAY
