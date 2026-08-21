@@ -17,7 +17,7 @@ module axi_grant_tracker #(
     */
 
     /* verilator lint_off PINCONNECTEMPTY */
-    axi_fifo #(.DEPTH(FIFO_DEPTH), .WIDTH(NUM_MASTERS)) a_fifo (
+    axi_fifo #(.DEPTH(FIFO_DEPTH), .WIDTH(NUM_MASTERS)) u_a_fifo (
         .push(new_tx),
         .in(i_grant),
         .pop(tf_finished),

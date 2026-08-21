@@ -13,7 +13,10 @@ COCOTB_TEST_MODULES ?= tb_$(subst _wrapper,,$(TOPLEVEL))
 
 export PYTHONPATH := $(PWD)/testbench:$(PYTHONPATH)
 export COCOTB_WAVES_FILE = waves/fst/$(COCOTB_TEST_MODULES).fst
+COCOTB_RESULTS_FILE ?= $(SIM_BUILD)/results.xml
+export COCOTB_RESULTS_FILE
 export COCOTB_WAVES ?= 1
+export COCOTB_ANSI_OUTPUT ?= 1
 
 VERILOG_SOURCES += $(filter-out %_wrapper.sv, $(wildcard $(PWD)/source/*.sv))
 VERILOG_SOURCES += $(PWD)/tb_wrappers/$(TOPLEVEL).sv
@@ -29,7 +32,7 @@ view:
 	@surfer $(COCOTB_WAVES_FILE) --state-file waves/$(COCOTB_TEST_MODULES).surf.ron > /dev/null 2>&1 &
 
 %_sim:
-	@$(MAKE) sim TOPLEVEL=$* ; \
+	@$(MAKE) sim TOPLEVEL=$* COCOTB_RESULTS_FILE=sim_builds/$*/results.xml ; \
 	RET=$$? ; \
 	if [ -f dump.fst ]; then \
 		mv dump.fst waves/fst/tb_$*.fst ; \
@@ -61,6 +64,10 @@ MODULES = axi_addr_decoder \
 SIM_TARGETS = $(addsuffix _sim, $(MODULES))
 
 test_all: $(SIM_TARGETS)
+	@$(MAKE) report
+
+report:
+	@python3 scripts/report.py
 
 clean::
 	rm -rf sim_builds

@@ -27,6 +27,13 @@ class TB:
         # Start clock
         cocotb.start_soon(Clock(self.clk, 10, "ns").start())
 
+        # Silence cocotbext-axi logging
+        logging.getLogger(f"cocotb.{dut._name}").setLevel(logging.WARNING)
+        logging.getLogger(f"cocotb.{dut._name}.m0").setLevel(logging.WARNING)
+        logging.getLogger(f"cocotb.{dut._name}.m1").setLevel(logging.WARNING)
+        logging.getLogger(f"cocotb.{dut._name}.s0").setLevel(logging.WARNING)
+        logging.getLogger(f"cocotb.{dut._name}.s1").setLevel(logging.WARNING)
+
         # Buses
         m0_bus = AxiBus.from_prefix(dut, "m0")
         m1_bus = AxiBus.from_prefix(dut, "m1")
@@ -44,12 +51,6 @@ class TB:
         self.s1 = AxiRam(s1_bus, self.clk, self.n_rst, size=2**ADDR_WIDTH, reset_active_level=False)
         self.slaves = [self.s0, self.s1]
 
-        # Silence cocotbext-axi logging
-        logging.getLogger(f"cocotb.{dut._name}").setLevel(logging.WARNING)
-        logging.getLogger(f"cocotb.{dut._name}.m0").setLevel(logging.WARNING)
-        logging.getLogger(f"cocotb.{dut._name}.m1").setLevel(logging.WARNING)
-        logging.getLogger(f"cocotb.{dut._name}.s0").setLevel(logging.WARNING)
-        logging.getLogger(f"cocotb.{dut._name}.s1").setLevel(logging.WARNING)
 
     async def reset(self):
         self.n_rst.value = 0
@@ -345,11 +346,11 @@ async def test_random_transactions(dut):
 
         # random/valid stalls
         for device in tb.masters + tb.slaves:
-            device.write_if.aw_channel.set_pause_generator(stall_generator())
-            device.write_if.w_channel.set_pause_generator(stall_generator())
-            device.write_if.b_channel.set_pause_generator(stall_generator())
-            device.read_if.ar_channel.set_pause_generator(stall_generator())
-            device.read_if.r_channel.set_pause_generator(stall_generator())
+            device.write_if.aw_channel.set_pause_generator(stall_generator(random.uniform(0, 0.8)))
+            device.write_if.w_channel.set_pause_generator(stall_generator(random.uniform(0, 0.8)))
+            device.write_if.b_channel.set_pause_generator(stall_generator(random.uniform(0, 0.8)))
+            device.read_if.ar_channel.set_pause_generator(stall_generator(random.uniform(0, 0.8)))
+            device.read_if.r_channel.set_pause_generator(stall_generator(random.uniform(0, 0.8)))
 
         # queue and execute transactions
         events = []

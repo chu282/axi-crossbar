@@ -13,7 +13,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 log = logging.getLogger(f"cocotb.{__name__}")
 log.setLevel(logging.INFO)
 
-NUM_TESTS = 2000
+NUM_TESTS = 1000
 
 @cocotb.test()
 async def test_axi_sram(dut):

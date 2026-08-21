@@ -61,9 +61,6 @@ async def test_axi_decerr_handler(dut):
     address_id.value = address_id_val
     read_len.value = 8
     await FallingEdge(clk)
-    address_id.value = 0b0000
-    decerr.value = 0
-    read_len.value = 0
 
     assert address_ready.value == 1
     assert response_valid.value == 0
@@ -76,6 +73,9 @@ async def test_axi_decerr_handler(dut):
     write_valid.value = 1
     write_last.value = 1
     await FallingEdge(clk)
+    address_id.value = 0b0000
+    decerr.value = 0
+    read_len.value = 0
     write_valid.value = 0
     write_last.value = 0
 
@@ -119,8 +119,6 @@ async def test_axi_decerr_handler(dut):
     address_id_val = 0b1111
     address_id.value = address_id_val
     await FallingEdge(clk)
-    address_id.value = 0b0000
-    decerr.value = 0
 
     assert address_ready.value == 1
     assert write_ready.value == 0
@@ -132,6 +130,8 @@ async def test_axi_decerr_handler(dut):
     # transition to send_w_ready
     write.value = 1
     await FallingEdge(clk)
+    address_id.value = 0b0000
+    decerr.value = 0
     write.value = 0
 
     for _ in range(10):
@@ -185,13 +185,15 @@ async def test_axi_decerr_handler(dut):
     
     for _ in range(NUM_TESTS):
         # random inputs
-        if state == States.IDLE: write_val = random.randint(0, 1)
-        decerr_val = random.randint(0, 1)
+        if state == States.IDLE:
+            write_val = random.randint(0, 1)
+            decerr_val = random.randint(0, 1)
+            address_id_val = random.randint(0, 15)
+            read_len_val = random.randint(0, 255)
+
         response_ready_val = random.randint(0, 1)
         write_valid_val = random.randint(0, 1)
         write_last_val = random.randint(0, 1)
-        address_id_val = random.randint(0, 15)
-        read_len_val = random.randint(0, 255)
 
         write.value = write_val
         decerr.value = decerr_val
@@ -213,9 +215,6 @@ async def test_axi_decerr_handler(dut):
 
                 if decerr_val == 1:
                     state = States.SEND_ADDR_READY
-                    captured_address_id = address_id_val
-                    captured_read_len = read_len_val
-                    sent_responses = 0
 
             case States.SEND_ADDR_READY:
                 assert address_ready.value == 1
@@ -225,6 +224,10 @@ async def test_axi_decerr_handler(dut):
                 assert response_resp.value == 0
                 if write_val == 0: assert response_last.value == 0
                 assert decerr_grant.value == 1
+
+                reg_address_id = address_id_val
+                reg_read_len = read_len_val
+                sent_responses = 0
 
                 if write_val == 1:
                     state = States.SEND_W_READY
@@ -245,12 +248,12 @@ async def test_axi_decerr_handler(dut):
                 assert address_ready.value == 0
                 if write_val == 1: assert write_ready.value == 0
                 assert response_valid.value == 1
-                assert response_id.value == captured_address_id
+                assert response_id.value == reg_address_id
                 assert response_resp.value == DECERR
-                if write_val == 0: assert response_last.value == (sent_responses == captured_read_len)
+                if write_val == 0: assert response_last.value == (sent_responses == reg_read_len)
                 assert decerr_grant.value == 1
 
-                if (response_ready_val == 1 and (sent_responses == captured_read_len)):
+                if (response_ready_val == 1 and (sent_responses == reg_read_len)):
                    state = States.IDLE
 
                 if response_ready_val == 1:

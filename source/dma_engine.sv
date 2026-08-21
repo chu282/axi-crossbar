@@ -63,7 +63,7 @@ module dma_engine #(
     axi_fifo #(
         .DEPTH(FIFO_DEPTH),
         .WIDTH(DATA_WIDTH)
-    ) dma_fifo (
+    ) u_fifo (
         .clk(clk),
         .n_rst(n_rst),
         .push(fifo_push),
@@ -98,7 +98,7 @@ module dma_engine #(
             end
             BUSY: begin
                 if (transfer_done) begin
-                    if (slave_err) next_dma_state = ERR;
+                    if (next_slave_err) next_dma_state = ERR;
                     else next_dma_state = DONE;
                 end
             end
@@ -426,6 +426,14 @@ module dma_engine #(
                 else if (w_rem_start <= 32'(MAX_TRANS_SIZE) * 2) num_resps <= 3;
                 else if (w_rem_start <= 32'(MAX_TRANS_SIZE) * 3) num_resps <= 4;
                 else num_resps <= 5;
+
+                fifo_buf_flush <= 0;
+            end
+            else begin
+                if (m.rlast && m.rvalid && m.rready && is_last_r_burst && needs_flush)
+                    fifo_buf_flush <= 1;
+                else if (fifo_buf_flush && (!fifo_full || fifo_pop))
+                    fifo_buf_flush <= 0;
             end
             if (m.arvalid && m.arready) r_first_trans <= 0;
             if (m.awvalid && m.awready) begin 
@@ -438,8 +446,6 @@ module dma_engine #(
             beat_count <= next_beat_count;
 
             w_bytes_transferred <= next_w_bytes_transferred;
-
-            fifo_buf_flush <= m.rlast && m.rvalid && m.rready && is_last_r_burst && needs_flush;
             fifo_buf <= next_fifo_buf;
 
             if (m.bvalid && m.bready)

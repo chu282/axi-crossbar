@@ -34,7 +34,6 @@ module dma_csr #(
 
     logic [11:0] reg_araddr, reg_awaddr;
     logic [ID_WIDTH-1:0] reg_arid, reg_awid;
-    logic [STRB_WIDTH-1:0] reg_wstrb;
 
     logic [1:0] bresp, rresp;
     logic [DATA_WIDTH-1:0] rdata;
@@ -129,13 +128,11 @@ module dma_csr #(
 
             reg_awaddr <= 0;
             reg_awid <= 0;
-            reg_wstrb <= 0;
         end
         else begin
             if (write_state == W_IDLE && s.awvalid) begin
                 reg_awaddr <= s.awaddr[11:0];
                 reg_awid <= s.awid;
-                reg_wstrb <= s.wstrb;
             end
             if (read_state == R_IDLE && s.arvalid) begin
                 reg_araddr <= s.araddr[11:0];
@@ -166,7 +163,7 @@ module dma_csr #(
         // write
         if (write_state == W_WRITE && s.wvalid) begin
             for (int i = 0; i < STRB_WIDTH; i++) begin
-                w_mask[i*8+:8] = {8{reg_wstrb[i]}};
+                w_mask[i*8+:8] = {8{s.wstrb[i]}};
             end
             masked_data = s.wdata & w_mask;
 

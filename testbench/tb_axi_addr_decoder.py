@@ -7,6 +7,7 @@ from cocotb.triggers import Timer
 async def test_axi_addr_decoder(dut):
     ADDR_WIDTH = int(dut.ADDR_WIDTH.value)
     NUM_SLAVES = int(dut.NUM_SLAVES.value)
+    NUM_TOTAL_SLAVES = int(dut.NUM_TOTAL_SLAVES.value)
 
     base_addrs = [0x0000, 0x0080, 0x2000, 0x8000]
     addr_masks = [0xFFF0, 0xFF80, 0xE000, 0x8000]
@@ -24,8 +25,8 @@ async def test_axi_addr_decoder(dut):
                     addr_mask = addr_masks[i]
                     if (addr & addr_mask) == base_addr:
                         exp_slave_select = 1 << i
+                if exp_slave_select == 0:
+                    exp_slave_select = 1 << NUM_SLAVES
 
             assert int(dut.slave_select.value) == exp_slave_select, \
                 get_err(exp_slave_select, "slave_select", dut.slave_select.value, [addr, valid, base_addr, addr_mask], ["addr", "valid", "base_addr", "addr_mask"])
-            assert int(dut.decerr.value) == (valid and exp_slave_select == 0), \
-                get_err(exp_decerr, "decerr", dut.decerr.value, [addr, valid], ["addr", "valid"])

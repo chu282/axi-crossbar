@@ -2,12 +2,12 @@
 
 module axi_addr_decoder_wrapper #(
     parameter ADDR_WIDTH = 16,
-    parameter NUM_SLAVES = 4
+    parameter NUM_SLAVES = 4,
+    parameter NUM_TOTAL_SLAVES = NUM_SLAVES + 1
 ) (
     input  logic valid,
     input  logic [ADDR_WIDTH-1:0] addr,
-    output logic [NUM_SLAVES-1:0] slave_select,
-    output logic decerr
+    output logic [NUM_TOTAL_SLAVES-1:0] slave_select
 );
 
     localparam [ADDR_WIDTH-1:0] BASE_ADDRS [NUM_SLAVES-1:0] = '{
@@ -24,6 +24,7 @@ module axi_addr_decoder_wrapper #(
     axi_addr_decoder #(
         .ADDR_WIDTH(ADDR_WIDTH),
         .NUM_SLAVES(NUM_SLAVES),
+        .NUM_TOTAL_SLAVES(NUM_TOTAL_SLAVES),
         .BASE_ADDRS(BASE_ADDRS),
         .ADDR_MASKS(ADDR_MASKS)
     ) dut (.*);

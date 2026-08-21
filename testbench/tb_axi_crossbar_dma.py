@@ -42,15 +42,15 @@ class TB:
         # Start clock
         cocotb.start_soon(Clock(self.clk, 10, "ns").start())
 
+        # Silence cocotbext-axi logging
+        logging.getLogger(f"cocotb.{dut._name}").setLevel(logging.WARNING)
+        logging.getLogger(f"cocotb.{dut._name}.m0").setLevel(logging.WARNING)
+
         # Buses
         cpu_bus = AxiBus.from_prefix(dut, "m0")
 
         # Instantiate CPU
         self.cpu = AxiMaster(cpu_bus, self.clk, self.n_rst, reset_active_level=False)
-
-        # Silence cocotbext-axi logging
-        logging.getLogger(f"cocotb.{dut._name}").setLevel(logging.WARNING)
-        logging.getLogger(f"cocotb.{dut._name}.m0").setLevel(logging.WARNING)
 
     async def reset(self):
         self.n_rst.value = 0
@@ -82,8 +82,10 @@ async def write_guard_data(tb, from_addr, to_addr, length):
     upper_guard_addr = to_addr + length
     upper_guard_data = b"\xbe\xef\xde\xad"[:upper_guard_length]
 
-    lower_guard_valid = (lower_guard_length > 0) and not overlaps_source(lower_guard_addr, lower_guard_length, from_addr, length)
-    upper_guard_valid = (upper_guard_length > 0) and not overlaps_source(upper_guard_addr, upper_guard_length, from_addr, length)
+    lower_guard_valid = (lower_guard_length > 0) and (to_addr <= 4096) and \
+                        not overlaps_source(lower_guard_addr, lower_guard_length, from_addr, length)
+    upper_guard_valid = (upper_guard_length > 0) and (to_addr + length + upper_guard_length <= 4096) and \
+                        not overlaps_source(upper_guard_addr, upper_guard_length, from_addr, length)
 
     if lower_guard_valid: await tb.cpu.write(lower_guard_addr, lower_guard_data)
     if upper_guard_valid: await tb.cpu.write(upper_guard_addr, upper_guard_data)
@@ -116,20 +118,19 @@ async def poll_status(tb):
 
 @cocotb.test(timeout_time=1, timeout_unit="ms")
 async def test_sram_write(dut):
-    dut._log.info("---- Testing CPU-SRAM direct write and read ----")
+    log.info("---- Testing CPU-SRAM direct write and read ----")
+    dut.test.value = 1
 
     tb = TB(dut)
     await tb.reset()
-    tb.dut.test.value = 2
 
     NUM_TESTS = 200
     
     for i in range(NUM_TESTS):
-        if i == NUM_TESTS // 2:
-            tb.set_stalls(0.2)
+        tb.set_stalls(random.uniform(0, 0.8))
 
         length = random.randint(1, 512)
-        addr = random.randint(0, 0x7FFF_FFFF - length)
+        addr = random.randint(0, 4096 - length)
         data = random.randbytes(length)
 
         w_resp = await tb.cpu.write(addr, data)
@@ -141,11 +142,11 @@ async def test_sram_write(dut):
 
 @cocotb.test(timeout_time=1, timeout_unit="ms")
 async def test_directed_transfer(dut):
-    dut._log.info("---- Directed normal transfer test ----")
+    log.info("---- Directed normal transfer test ----")
+    dut.test.value = 2
 
     tb = TB(dut)
     await tb.reset()
-    tb.dut.test.value = 2
 
     cases = [
         {"name": "1-byte transfer",              "from_addr": 0x000, "to_addr": 0x001, "length": 0x1},
@@ -163,7 +164,7 @@ async def test_directed_transfer(dut):
 
     for stall in [0, 1]:
         if stall == 1:
-            tb.set_stalls(0.5)
+            tb.set_stalls(random.uniform(0.1, 0.8))
         else:
             tb.clear_stalls()
 
@@ -207,11 +208,11 @@ async def test_directed_transfer(dut):
 
 @cocotb.test(timeout_time=1, timeout_unit="ms")
 async def test_error_generation(dut):
-    dut._log.info("---- Error generation test ----")
+    log.info("---- Error generation test ----")
+    dut.test.value = 3
 
     tb = TB(dut)
     await tb.reset()
-    tb.dut.test.value = 3
 
     cases = [
         {"name": "Out of bounds to_addr error",   "from_addr": 0x001, "to_addr": 0x1000, "length": 0x100},
@@ -222,104 +223,92 @@ async def test_error_generation(dut):
         {"name": "0 length burst", "from_addr": 0x080, "to_addr": 0x010, "length": 0x0},
     ]
 
-# @cocotb.test(timeout_time=1, timeout_unit="ms")
-# async def test_random_transfer(dut):
-#     dut._log.info("---- Constrained random transfer ----")
+    for case in cases:
+        from_addr = case["from_addr"]
+        to_addr = case["to_addr"]
+        length = case["length"]
+        log.info(case["name"])
 
-#     tb = TB(dut)
-#     await tb.reset()
+        # write parameters into DMA csr
+        await tb.cpu.write(FROM_ADDR_REG, int.to_bytes(from_addr, 4, "little"))
+        await tb.cpu.write(TO_ADDR_REG,   int.to_bytes(to_addr, 4, "little"))
+        await tb.cpu.write(LENGTH_REG,    int.to_bytes(length, 4, "little"))
 
-#     NUM_TESTS = 200
-#     for i in range(NUM_TESTS):
-#         if i == NUM_TESTS // 2:
-#             tb.set_stalls(0.2)
+        # start DMA transfer
+        await tb.cpu.write(CONTROL_REG, int.to_bytes(START, 4, "little"))
 
-#         from_addr = random.randint(0, 0x7FFF_FFFF)
-#         to_addr = random.randint(0, 0x7FFF_FFFF)
-#         length = random.randint(1, 1024)
+        # poll until done
+        status = await poll_status(tb)
+        assert status == ERR
 
-#         # write random data into SRAM
-#         data = random.randbytes(length)
-#         await tb.cpu.write(to_addr, data)
+        # acknowledge error and return to IDLE
+        await tb.cpu.write(CONTROL_REG, int.to_bytes(ACK_ERR, 4, "little"))
+        resp = await tb.cpu.read(STATUS_REG, 4)
+        assert (int.from_bytes(resp.data, "little")) == IDLE
 
-#         w_resp1 = await tb.cpu.write(FROM_ADDR_REG, from_addr)
-#         w_resp2 = await tb.cpu.write(TO_ADDR_REG, to_addr)
-#         w_resp3 = await tb.cpu.write(LENGTH_REG, length)
+@cocotb.test(timeout_time=100, timeout_unit="ms")
+async def test_random_transfer(dut):
+    log.info("---- Constrained random test ----")
+    dut.test.value = 4
 
-#         r_resp1 = await tb.cpu.read(FROM_ADDR_REG, 4)
-#         r_resp2 = await tb.cpu.read(TO_ADDR_REG, 4)
-#         r_resp3 = await tb.cpu.read(LENGTH_REG, 4)
+    tb = TB(dut)
+    await tb.reset()
 
-#         assert w_resp1.resp == AxiResp.OKAY
-#         assert w_resp2.resp == AxiResp.OKAY
-#         assert w_resp3.resp == AxiResp.OKAY
-#         assert r_resp1.resp == AxiResp.OKAY
-#         assert r_resp2.resp == AxiResp.OKAY
-#         assert r_resp3.resp == AxiResp.OKAY
-#         assert r_resp1.data == int.to_bytes(from_addr, 4, "little")
-#         assert r_resp2.data == int.to_bytes(to_addr, 4, "little")
-#         assert r_resp3.data == int.to_bytes(length, 4, "little")
+    def calc_exp_status(from_addr, to_addr, length):
+        if (from_addr > 0x0000_0FFF or to_addr > 0x0000_0FFF or 
+            (from_addr < to_addr and from_addr + length > to_addr) or 
+            (from_addr > to_addr and to_addr + length > from_addr) or
+            from_addr == to_addr or
+            (from_addr + length > 0x1000) or 
+            (to_addr + length > 0x1000) or 
+            length == 0):
+            return ERR
+        else:
+            return DONE
 
-# @cocotb.test()
-# async def test_cpu_csr_access(dut):
-#     """Verify CPU can read and write DMA CSR registers."""
-#     tb = TB(dut)
-#     await tb.reset()
+    NUM_TESTS = 5000
+    for i in range(NUM_TESTS):
+        tb.set_stalls(random.uniform(0, 0.8))
 
-#     log.info("---- Testing CPU read/write to DMA CSR registers ----")
+        from_addr = random.randint(0, 0x0000_1FFF)
+        to_addr = random.randint(0, 0x0000_1FFF)
+        length = random.randint(0, 2048)
+        data = random.randbytes(length)
+        exp_status = calc_exp_status(from_addr, to_addr, length)
+        # log.info(f"from_addr: {from_addr:>10}, to_addr: {to_addr:>10}, length: {length:>10}, exp_status: {exp_status:>10}")
 
-#     # Write CSR parameters
-#     await tb.cpu.write(REG_FROM_ADDR, int.to_bytes(0x0000_1234, 4, "little"))
-#     await tb.cpu.write(REG_TO_ADDR,   int.to_bytes(0x0000_5678, 4, "little"))
-#     await tb.cpu.write(REG_LENGTH,    int.to_bytes(256, 4, "little"))
+        if exp_status == DONE:
+            # write source data to SRAM
+            await tb.cpu.write(from_addr, data)
 
-#     # Read back and verify
-#     read_from   = await tb.cpu.read(REG_FROM_ADDR, 4)
-#     read_to     = await tb.cpu.read(REG_TO_ADDR, 4)
-#     read_length = await tb.cpu.read(REG_LENGTH, 4)
-#     read_status = await tb.cpu.read(REG_STATUS, 4)
+        # write guard data around destination buffer
+        guard_info = await write_guard_data(tb, from_addr, to_addr, length)
 
-#     assert int.from_bytes(read_from.data, "little") == 0x0000_1234
-#     assert int.from_bytes(read_to.data, "little") == 0x0000_5678
-#     assert int.from_bytes(read_length.data, "little") == 256
-#     assert (int.from_bytes(read_status.data, "little") & 0x3) == STATUS_IDLE
+        # write parameters into DMA csr
+        await tb.cpu.write(FROM_ADDR_REG, int.to_bytes(from_addr, 4, "little"))
+        await tb.cpu.write(TO_ADDR_REG,   int.to_bytes(to_addr, 4, "little"))
+        await tb.cpu.write(LENGTH_REG,    int.to_bytes(length, 4, "little"))
 
-# @cocotb.test()
-# async def test_dma_transfer(dut):
-#     """Verify full end-to-end CPU-initiated DMA transfer in SRAM through Crossbar."""
-#     tb = TB(dut)
-#     await tb.reset()
+        # start DMA transfer
+        await tb.cpu.write(CONTROL_REG, int.to_bytes(START, 4, "little"))
 
-#     log.info("---- Testing end-to-end DMA transfer in SRAM ----")
+        # poll until done
+        status = await poll_status(tb)
+        assert status == exp_status
 
-#     from_addr = 0x0000_1000
-#     to_addr   = 0x0000_4000
-#     length    = 64
-#     test_data = random.randbytes(length)
+        if exp_status == DONE:
+            # assert destination data is correct
+            r_resp = await tb.cpu.read(to_addr, length)
+            assert r_resp.resp == AxiResp.OKAY
+            assert r_resp.data == data
 
-#     # 1. CPU initializes source data in SRAM
-#     await tb.cpu.write(from_addr, test_data)
+        # assert guard data remained intact
+        await check_guard_data(tb, guard_info)
 
-#     # 2. CPU configures DMA CSR
-#     await tb.cpu.write(REG_FROM_ADDR, int.to_bytes(from_addr, 4, "little"))
-#     await tb.cpu.write(REG_TO_ADDR,   int.to_bytes(to_addr, 4, "little"))
-#     await tb.cpu.write(REG_LENGTH,    int.to_bytes(length, 4, "little"))
-
-#     # 3. CPU triggers DMA start
-#     await tb.cpu.write(REG_STATUS, int.to_bytes(CTRL_START, 4, "little"))
-
-#     # 4. CPU polls DMA status until DONE
-#     while True:
-#         resp = await tb.cpu.read(REG_STATUS, 4)
-#         status = int.from_bytes(resp.data, "little") & 0x3
-#         if status == STATUS_DONE:
-#             break
-#         await FallingEdge(tb.clk)
-
-#     # 5. Verify transferred data in SRAM
-#     assert tb.sram.read(to_addr, length) == test_data
-
-#     # 6. CPU acknowledges DONE
-#     await tb.cpu.write(REG_STATUS, int.to_bytes(CTRL_ACK_DONE, 4, "little"))
-#     resp = await tb.cpu.read(REG_STATUS, 4)
-#     assert (int.from_bytes(resp.data, "little") & 0x3) == STATUS_IDLE
+        # acknowledge done and return to IDLE
+        if exp_status == DONE:
+            await tb.cpu.write(CONTROL_REG, int.to_bytes(ACK_DONE, 4, "little"))
+        else: # error
+            await tb.cpu.write(CONTROL_REG, int.to_bytes(ACK_ERR, 4, "little"))
+        resp = await tb.cpu.read(STATUS_REG, 4)
+        assert (int.from_bytes(resp.data, "little")) == IDLE

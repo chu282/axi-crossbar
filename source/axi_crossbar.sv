@@ -11,11 +11,6 @@ module axi_crossbar #(
     // Slave addresses
     parameter [ADDR_WIDTH-1:0] SLAVE_BASE_ADDR [NUM_SLAVES-1:0] = '{32'h80000000, 32'h00000000},
     parameter [ADDR_WIDTH-1:0] SLAVE_ADDR_MASK [NUM_SLAVES-1:0] = '{32'hF0000000, 32'h80000000}
-
-    /*
-    Slave 0: 0x0000_0000 -> 0x7FFF_FFFF
-    Slave 1: 0x8000_0000 -> 0x8FFF_FFFF
-    */
 ) (
     input  logic clk, n_rst,
 
@@ -25,6 +20,8 @@ module axi_crossbar #(
 );
 
     localparam STRB_WIDTH = DATA_WIDTH / 8;
+    localparam NUM_TOTAL_SLAVES = NUM_SLAVES + 1;
+    localparam DECERR_SLAVE = NUM_SLAVES;
 
     // widths
     localparam LEN_WIDTH   = 8;
@@ -47,20 +44,20 @@ module axi_crossbar #(
     logic [ID_WIDTH-1:0] aw_m_id_skid [NUM_MASTERS-1:0];
     logic [PAYLOAD_WIDTH_AW-1:0] aw_m_payload_skid [NUM_MASTERS-1:0];
 
-    logic [NUM_SLAVES-1:0] aw_s_valid_mux;
-    logic [NUM_SLAVES-1:0] aw_s_ready_mux;
-    logic [ADDR_WIDTH-1:0] aw_s_addr_mux [NUM_SLAVES-1:0];
-    logic [PAYLOAD_WIDTH_AW-1:0] aw_s_payload_mux [NUM_SLAVES-1:0];
+    logic [NUM_TOTAL_SLAVES-1:0] aw_s_valid_mux;
+    logic [NUM_TOTAL_SLAVES-1:0] aw_s_ready_mux;
+    logic [ADDR_WIDTH-1:0] aw_s_addr_mux [NUM_TOTAL_SLAVES-1:0];
+    logic [PAYLOAD_WIDTH_AW-1:0] aw_s_payload_mux [NUM_TOTAL_SLAVES-1:0];
 
     // W Channel
     logic [NUM_MASTERS-1:0] w_m_valid_skid;
     logic [NUM_MASTERS-1:0] w_m_ready_skid;
     logic [PAYLOAD_WIDTH_W-1:0] w_m_payload_skid [NUM_MASTERS-1:0];
 
-    logic [NUM_SLAVES-1:0] w_s_valid_mux;
-    logic [NUM_SLAVES-1:0] w_s_ready_mux;
-    logic [PAYLOAD_WIDTH_W-1:0] w_s_payload_mux [NUM_SLAVES-1:0];
-    logic [NUM_SLAVES-1:0] w_s_last_mux;
+    logic [NUM_TOTAL_SLAVES-1:0] w_s_valid_mux;
+    logic [NUM_TOTAL_SLAVES-1:0] w_s_ready_mux;
+    logic [PAYLOAD_WIDTH_W-1:0] w_s_payload_mux [NUM_TOTAL_SLAVES-1:0];
+    logic [NUM_TOTAL_SLAVES-1:0] w_s_last_mux;
 
     // AR Channel
     logic [NUM_MASTERS-1:0] ar_m_valid_skid;
@@ -69,16 +66,16 @@ module axi_crossbar #(
     logic [ID_WIDTH-1:0] ar_m_id_skid [NUM_MASTERS-1:0];
     logic [PAYLOAD_WIDTH_AR-1:0] ar_m_payload_skid [NUM_MASTERS-1:0];
 
-    logic [NUM_SLAVES-1:0] ar_s_valid_mux;
-    logic [NUM_SLAVES-1:0] ar_s_ready_mux;
-    logic [ADDR_WIDTH-1:0] ar_s_addr_mux [NUM_SLAVES-1:0];
-    logic [PAYLOAD_WIDTH_AR-1:0] ar_s_payload_mux [NUM_SLAVES-1:0];
+    logic [NUM_TOTAL_SLAVES-1:0] ar_s_valid_mux;
+    logic [NUM_TOTAL_SLAVES-1:0] ar_s_ready_mux;
+    logic [ADDR_WIDTH-1:0] ar_s_addr_mux [NUM_TOTAL_SLAVES-1:0];
+    logic [PAYLOAD_WIDTH_AR-1:0] ar_s_payload_mux [NUM_TOTAL_SLAVES-1:0];
 
     // B Channel
-    logic [NUM_SLAVES-1:0] b_s_valid_skid;
-    logic [NUM_SLAVES-1:0] b_s_ready_skid;
-    logic [ID_WIDTH-1:0] b_s_id_skid [NUM_SLAVES-1:0];
-    logic [PAYLOAD_WIDTH_B-1:0] b_s_payload_skid [NUM_SLAVES-1:0];
+    logic [NUM_TOTAL_SLAVES-1:0] b_s_valid_skid;
+    logic [NUM_TOTAL_SLAVES-1:0] b_s_ready_skid;
+    logic [ID_WIDTH-1:0] b_s_id_skid [NUM_TOTAL_SLAVES-1:0];
+    logic [PAYLOAD_WIDTH_B-1:0] b_s_payload_skid [NUM_TOTAL_SLAVES-1:0];
 
     logic [NUM_MASTERS-1:0] b_m_valid_mux;
     logic [NUM_MASTERS-1:0] b_m_ready_mux;
@@ -86,10 +83,10 @@ module axi_crossbar #(
     logic [PAYLOAD_WIDTH_B-1:0] b_m_payload_mux [NUM_MASTERS-1:0];
 
     // R Channel
-    logic [NUM_SLAVES-1:0] r_s_valid_skid;
-    logic [NUM_SLAVES-1:0] r_s_ready_skid;
-    logic [ID_WIDTH-1:0] r_s_id_skid [NUM_SLAVES-1:0];
-    logic [PAYLOAD_WIDTH_R-1:0] r_s_payload_skid [NUM_SLAVES-1:0];
+    logic [NUM_TOTAL_SLAVES-1:0] r_s_valid_skid;
+    logic [NUM_TOTAL_SLAVES-1:0] r_s_ready_skid;
+    logic [ID_WIDTH-1:0] r_s_id_skid [NUM_TOTAL_SLAVES-1:0];
+    logic [PAYLOAD_WIDTH_R-1:0] r_s_payload_skid [NUM_TOTAL_SLAVES-1:0];
 
     logic [NUM_MASTERS-1:0] r_m_valid_mux;
     logic [NUM_MASTERS-1:0] r_m_ready_mux;
@@ -98,183 +95,131 @@ module axi_crossbar #(
     logic [NUM_MASTERS-1:0] r_m_last_mux;
 
     // ========== SKID BUFFERS ========== //
-    // Forward path
-    logic [NUM_MASTERS-1:0] decerr_handled_aw_m_ready;
-    logic [NUM_MASTERS-1:0] decerr_handled_ar_m_ready;
-    logic [NUM_MASTERS-1:0] decerr_handled_w_m_ready;
-    logic [NUM_MASTERS-1:0] decerr_aw_ready;
-    logic [NUM_MASTERS-1:0] decerr_ar_ready;
-    logic [NUM_MASTERS-1:0] decerr_w_ready;
-    logic [NUM_MASTERS-1:0] decerr_aw_grant;
-    logic [NUM_MASTERS-1:0] decerr_ar_grant;
-
-    always_comb begin
-        for (int m_idx = 0; m_idx < NUM_MASTERS; m_idx++) begin
-            decerr_handled_aw_m_ready[m_idx] = decerr_aw_grant[m_idx] ? decerr_aw_ready[m_idx] : aw_m_ready_skid[m_idx];
-            decerr_handled_ar_m_ready[m_idx] = decerr_ar_grant[m_idx] ? decerr_ar_ready[m_idx] : ar_m_ready_skid[m_idx];
-            decerr_handled_w_m_ready[m_idx] = decerr_aw_grant[m_idx] ? decerr_w_ready[m_idx] : w_m_ready_skid[m_idx];
-        end
-    end
-
     genvar m_idx, s_idx;
     generate
         // Master side
         for (m_idx = 0; m_idx < NUM_MASTERS; m_idx++) begin
             // AW Channel
-            axi_skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_AW)) sb_aw_master (
+            axi_skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_AW)) u_sb_aw_master (
                 .src_valid(m[m_idx].awvalid), 
                 .dst_valid(aw_m_valid_skid[m_idx]), 
                 .src_ready(m[m_idx].awready), 
-                .dst_ready(decerr_handled_aw_m_ready[m_idx]), 
+                .dst_ready(aw_m_ready_skid[m_idx]), 
                 .src_payload({m[m_idx].awaddr, m[m_idx].awid, m[m_idx].awlen, m[m_idx].awsize, m[m_idx].awburst, m[m_idx].awlock}), 
                 .dst_payload(aw_m_payload_skid[m_idx]), .*
-                );
-            assign aw_m_addr_skid[m_idx] = aw_m_payload_skid[m_idx][PAYLOAD_WIDTH_AW-1:PAYLOAD_WIDTH_AW-ADDR_WIDTH]; // extract addr for use in decoder
+            );
+            assign aw_m_addr_skid[m_idx] = aw_m_payload_skid[m_idx][PAYLOAD_WIDTH_AW-1:PAYLOAD_WIDTH_AW-ADDR_WIDTH];
 
             // W Channel
-            axi_skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_W)) sb_w_master (
+            axi_skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_W)) u_sb_w_master (
                 .src_valid(m[m_idx].wvalid), 
                 .dst_valid(w_m_valid_skid[m_idx]), 
                 .src_ready(m[m_idx].wready), 
-                .dst_ready(decerr_handled_w_m_ready[m_idx]), 
+                .dst_ready(w_m_ready_skid[m_idx]), 
                 .src_payload({m[m_idx].wdata, m[m_idx].wstrb, m[m_idx].wlast}), 
                 .dst_payload(w_m_payload_skid[m_idx]), .*
-                );
+            );
 
             // AR Channel
-            axi_skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_AR)) sb_ar_master (
+            axi_skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_AR)) u_sb_ar_master (
                 .src_valid(m[m_idx].arvalid), 
                 .dst_valid(ar_m_valid_skid[m_idx]), 
                 .src_ready(m[m_idx].arready), 
-                .dst_ready(decerr_handled_ar_m_ready[m_idx]), 
+                .dst_ready(ar_m_ready_skid[m_idx]), 
                 .src_payload({m[m_idx].araddr, m[m_idx].arid, m[m_idx].arlen, m[m_idx].arsize, m[m_idx].arburst, m[m_idx].arlock}), 
                 .dst_payload(ar_m_payload_skid[m_idx]), .*
-                );
-            assign ar_m_addr_skid[m_idx] = ar_m_payload_skid[m_idx][PAYLOAD_WIDTH_AR-1:PAYLOAD_WIDTH_AR-ADDR_WIDTH]; // extract addr for use in decoder 
+            );
+            assign ar_m_addr_skid[m_idx] = ar_m_payload_skid[m_idx][PAYLOAD_WIDTH_AR-1:PAYLOAD_WIDTH_AR-ADDR_WIDTH];
         end
         
         // Slave side
         for (s_idx = 0; s_idx < NUM_SLAVES; s_idx++) begin
             // AW Channel
-            axi_skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_AW)) sb_aw_slave (
+            axi_skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_AW)) u_sb_aw_slave (
                 .src_valid(aw_s_valid_mux[s_idx]), 
                 .dst_valid(s[s_idx].awvalid), 
                 .src_ready(aw_s_ready_mux[s_idx]), 
                 .dst_ready(s[s_idx].awready), 
                 .src_payload(aw_s_payload_mux[s_idx]), 
                 .dst_payload({s[s_idx].awaddr, s[s_idx].awid, s[s_idx].awlen, s[s_idx].awsize, s[s_idx].awburst, s[s_idx].awlock}), .*
-                );
+            );
 
             // W Channel
-            axi_skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_W)) sb_w_slave (
+            axi_skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_W)) u_sb_w_slave (
                 .src_valid(w_s_valid_mux[s_idx]), 
                 .dst_valid(s[s_idx].wvalid), 
                 .src_ready(w_s_ready_mux[s_idx]), 
                 .dst_ready(s[s_idx].wready), 
                 .src_payload(w_s_payload_mux[s_idx]), 
                 .dst_payload({s[s_idx].wdata, s[s_idx].wstrb, s[s_idx].wlast}), .*
-                );
+            );
 
             // AR Channel
-            axi_skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_AR)) sb_ar_slave (
+            axi_skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_AR)) u_sb_ar_slave (
                 .src_valid(ar_s_valid_mux[s_idx]), 
                 .dst_valid(s[s_idx].arvalid), 
                 .src_ready(ar_s_ready_mux[s_idx]), 
                 .dst_ready(s[s_idx].arready), 
                 .src_payload(ar_s_payload_mux[s_idx]), 
                 .dst_payload({s[s_idx].araddr, s[s_idx].arid, s[s_idx].arlen, s[s_idx].arsize, s[s_idx].arburst, s[s_idx].arlock}), .*
-                );
+            );
         end
     endgenerate
 
     // Reverse path
-    logic [NUM_MASTERS-1:0] decerr_b_valid;
-    logic [NUM_MASTERS-1:0] decerr_r_valid;
-    logic [PAYLOAD_WIDTH_B-1:0] decerr_b_payload [NUM_MASTERS-1:0];
-    logic [PAYLOAD_WIDTH_R-1:0] decerr_r_payload [NUM_MASTERS-1:0];
-    logic [ID_WIDTH-1:0] decerr_b_id [NUM_MASTERS-1:0];
-    logic [ID_WIDTH-1:0] decerr_r_id [NUM_MASTERS-1:0];
-    logic [RESP_WIDTH-1:0] decerr_b_resp [NUM_MASTERS-1:0];
-    logic [RESP_WIDTH-1:0] decerr_r_resp [NUM_MASTERS-1:0];
-    logic [NUM_MASTERS-1:0] decerr_r_last;
-
-    logic [NUM_MASTERS-1:0] decerr_handled_b_m_valid;
-    logic [NUM_MASTERS-1:0] decerr_handled_r_m_valid;
-    logic [PAYLOAD_WIDTH_B-1:0] decerr_handled_b_m_payload [NUM_MASTERS-1:0];
-    logic [PAYLOAD_WIDTH_R-1:0] decerr_handled_r_m_payload [NUM_MASTERS-1:0];
-    logic [ID_WIDTH-1:0] decerr_handled_b_id [NUM_MASTERS-1:0];
-    logic [ID_WIDTH-1:0] decerr_handled_r_id [NUM_MASTERS-1:0];
-    logic [RESP_WIDTH-1:0] decerr_handled_b_resp [NUM_MASTERS-1:0];
-    logic [RESP_WIDTH-1:0] decerr_handled_r_resp [NUM_MASTERS-1:0];
-    logic [NUM_MASTERS-1:0] decerr_handled_r_last;
-
-    always_comb begin
-        for (int i = 0; i < NUM_MASTERS; i++) begin
-            decerr_b_payload[i] = {decerr_b_id[i], decerr_b_resp[i]};
-            decerr_r_payload[i] = {decerr_r_id[i], 32'd0, decerr_r_resp[i], decerr_r_last[i]};
-
-            decerr_handled_b_m_valid[i]   = decerr_aw_grant[i] ? decerr_b_valid[i]   : b_m_valid_mux[i];
-            decerr_handled_r_m_valid[i]   = decerr_ar_grant[i] ? decerr_r_valid[i]   : r_m_valid_mux[i];
-            decerr_handled_b_m_payload[i] = decerr_aw_grant[i] ? decerr_b_payload[i] : b_m_payload_mux[i];
-            decerr_handled_r_m_payload[i] = decerr_ar_grant[i] ? decerr_r_payload[i] : r_m_payload_mux[i];
-        end
-    end
-
     generate
         // Slave side
         for (s_idx = 0; s_idx < NUM_SLAVES; s_idx++) begin
             // B Channel
-            axi_skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_B)) sb_b_slave (
+            axi_skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_B)) u_sb_b_slave (
                 .src_valid(s[s_idx].bvalid), 
                 .dst_valid(b_s_valid_skid[s_idx]), 
                 .src_ready(s[s_idx].bready), 
                 .dst_ready(b_s_ready_skid[s_idx]), 
                 .src_payload({s[s_idx].bid, s[s_idx].bresp}), 
                 .dst_payload(b_s_payload_skid[s_idx]), .*
-                );
+            );
             assign b_s_id_skid[s_idx] = b_s_payload_skid[s_idx][PAYLOAD_WIDTH_B-1:PAYLOAD_WIDTH_B-ID_WIDTH];
 
             // R Channel
-            axi_skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_R)) sb_r_slave (
+            axi_skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_R)) u_sb_r_slave (
                 .src_valid(s[s_idx].rvalid), 
                 .dst_valid(r_s_valid_skid[s_idx]), 
                 .src_ready(s[s_idx].rready), 
                 .dst_ready(r_s_ready_skid[s_idx]), 
                 .src_payload({s[s_idx].rid, s[s_idx].rdata, s[s_idx].rresp, s[s_idx].rlast}), 
                 .dst_payload(r_s_payload_skid[s_idx]), .*
-                );
+            );
             assign r_s_id_skid[s_idx] = r_s_payload_skid[s_idx][PAYLOAD_WIDTH_R-1:PAYLOAD_WIDTH_R-ID_WIDTH];
         end
 
         // Master side
         for (m_idx = 0; m_idx < NUM_MASTERS; m_idx++) begin
             // B Channel
-            axi_skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_B)) sb_b_master (
-                .src_valid(decerr_handled_b_m_valid[m_idx]), 
+            axi_skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_B)) u_sb_b_master (
+                .src_valid(b_m_valid_mux[m_idx]), 
                 .dst_valid(m[m_idx].bvalid), 
                 .src_ready(b_m_ready_mux[m_idx]), 
                 .dst_ready(m[m_idx].bready), 
-                .src_payload(decerr_handled_b_m_payload[m_idx]), 
+                .src_payload(b_m_payload_mux[m_idx]), 
                 .dst_payload({m[m_idx].bid, m[m_idx].bresp}), .*
-                );
+            );
 
             // R Channel
-            axi_skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_R)) sb_r_master (
-                .src_valid(decerr_handled_r_m_valid[m_idx]), 
+            axi_skid_buffer #(.PAYLOAD_WIDTH(PAYLOAD_WIDTH_R)) u_sb_r_master (
+                .src_valid(r_m_valid_mux[m_idx]), 
                 .dst_valid(m[m_idx].rvalid), 
                 .src_ready(r_m_ready_mux[m_idx]), 
                 .dst_ready(m[m_idx].rready), 
-                .src_payload(decerr_handled_r_m_payload[m_idx]), 
+                .src_payload(r_m_payload_mux[m_idx]), 
                 .dst_payload({m[m_idx].rid, m[m_idx].rdata, m[m_idx].rresp, m[m_idx].rlast}), .*
-                );
+            );
         end
     endgenerate
 
     // ========== ADDRESS DECODERS ========== //
-    logic [NUM_SLAVES-1:0] aw_slave_select [NUM_MASTERS-1:0];
-    logic [NUM_SLAVES-1:0] ar_slave_select [NUM_MASTERS-1:0];
-    logic [NUM_MASTERS-1:0] aw_decerr;
-    logic [NUM_MASTERS-1:0] ar_decerr;
+    logic [NUM_TOTAL_SLAVES-1:0] aw_slave_select [NUM_MASTERS-1:0];
+    logic [NUM_TOTAL_SLAVES-1:0] ar_slave_select [NUM_MASTERS-1:0];
 
     generate
         for (m_idx = 0; m_idx < NUM_MASTERS; m_idx++) begin
@@ -282,68 +227,68 @@ module axi_crossbar #(
             axi_addr_decoder #(
                 .ADDR_WIDTH(ADDR_WIDTH),
                 .NUM_SLAVES(NUM_SLAVES),
+                .NUM_TOTAL_SLAVES(NUM_TOTAL_SLAVES),
                 .BASE_ADDRS(SLAVE_BASE_ADDR),
                 .ADDR_MASKS(SLAVE_ADDR_MASK)
-            ) aw_ad (
+            ) u_aw_ad (
                 .valid(aw_m_valid_skid[m_idx]),
                 .addr(aw_m_addr_skid[m_idx]), 
-                .slave_select(aw_slave_select[m_idx]),
-                .decerr(aw_decerr[m_idx])
+                .slave_select(aw_slave_select[m_idx])
             );
 
             // AR Channel
             axi_addr_decoder #(
                 .ADDR_WIDTH(ADDR_WIDTH),
                 .NUM_SLAVES(NUM_SLAVES),
+                .NUM_TOTAL_SLAVES(NUM_TOTAL_SLAVES),
                 .BASE_ADDRS(SLAVE_BASE_ADDR),
                 .ADDR_MASKS(SLAVE_ADDR_MASK)
-            ) ar_ad (
+            ) u_ar_ad (
                 .valid(ar_m_valid_skid[m_idx]),
                 .addr(ar_m_addr_skid[m_idx]), 
-                .slave_select(ar_slave_select[m_idx]),
-                .decerr(ar_decerr[m_idx])
+                .slave_select(ar_slave_select[m_idx])
             );
         end
     endgenerate
 
     // ========== ARBITERS ========== //
-    logic [NUM_SLAVES-1:0] aw_tx_started;
-    logic [NUM_SLAVES-1:0] ar_tx_started;
+    logic [NUM_TOTAL_SLAVES-1:0] aw_tx_started;
+    logic [NUM_TOTAL_SLAVES-1:0] ar_tx_started;
 
-    logic [NUM_SLAVES-1:0] aw_s_tf_finished;
-    logic [NUM_SLAVES-1:0] w_s_tf_finished;
-    logic [NUM_SLAVES-1:0] b_s_tf_finished;
-    logic [NUM_SLAVES-1:0] ar_s_tf_finished;
-    logic [NUM_SLAVES-1:0] r_s_tf_finished;
+    logic [NUM_TOTAL_SLAVES-1:0] aw_s_tf_finished;
+    logic [NUM_TOTAL_SLAVES-1:0] w_s_tf_finished;
+    logic [NUM_TOTAL_SLAVES-1:0] b_s_tf_finished;
+    logic [NUM_TOTAL_SLAVES-1:0] ar_s_tf_finished;
+    logic [NUM_TOTAL_SLAVES-1:0] r_s_tf_finished;
 
     logic [NUM_MASTERS-1:0] b_m_tf_finished;
     logic [NUM_MASTERS-1:0] r_m_tf_finished;
 
-    logic [NUM_SLAVES-1:0] w_full;
-    logic [NUM_SLAVES-1:0] b_full;
-    logic [NUM_SLAVES-1:0] ar_full;
+    logic [NUM_TOTAL_SLAVES-1:0] w_full;
+    logic [NUM_TOTAL_SLAVES-1:0] b_full;
+    logic [NUM_TOTAL_SLAVES-1:0] ar_full;
 
-    logic [NUM_MASTERS-1:0] aw_master_req [NUM_SLAVES-1:0];
-    logic [NUM_MASTERS-1:0] ar_master_req [NUM_SLAVES-1:0];
+    logic [NUM_MASTERS-1:0] aw_master_req [NUM_TOTAL_SLAVES-1:0];
+    logic [NUM_MASTERS-1:0] ar_master_req [NUM_TOTAL_SLAVES-1:0];
 
-    logic [NUM_MASTERS-1:0] b_master_req [NUM_SLAVES-1:0];
-    logic [NUM_MASTERS-1:0] r_master_req [NUM_SLAVES-1:0];
+    logic [NUM_MASTERS-1:0] b_master_req [NUM_TOTAL_SLAVES-1:0];
+    logic [NUM_MASTERS-1:0] r_master_req [NUM_TOTAL_SLAVES-1:0];
 
-    logic [NUM_SLAVES-1:0] b_slave_select [NUM_MASTERS-1:0];
-    logic [NUM_SLAVES-1:0] r_slave_select [NUM_MASTERS-1:0];
+    logic [NUM_TOTAL_SLAVES-1:0] b_slave_select [NUM_MASTERS-1:0];
+    logic [NUM_TOTAL_SLAVES-1:0] r_slave_select [NUM_MASTERS-1:0];
 
-    logic [NUM_SLAVES-1:0] b_slave_req [NUM_MASTERS-1:0];
-    logic [NUM_SLAVES-1:0] r_slave_req [NUM_MASTERS-1:0];
+    logic [NUM_TOTAL_SLAVES-1:0] b_slave_req [NUM_MASTERS-1:0];
+    logic [NUM_TOTAL_SLAVES-1:0] r_slave_req [NUM_MASTERS-1:0];
 
-    logic [NUM_MASTERS-1:0] aw_grant [NUM_SLAVES-1:0];
-    logic [NUM_MASTERS-1:0] w_grant [NUM_SLAVES-1:0];
-    logic [NUM_SLAVES-1:0] b_grant [NUM_MASTERS-1:0];
-    logic [NUM_MASTERS-1:0] ar_grant [NUM_SLAVES-1:0];
-    logic [NUM_SLAVES-1:0] r_grant [NUM_MASTERS-1:0];
+    logic [NUM_MASTERS-1:0] aw_grant [NUM_TOTAL_SLAVES-1:0];
+    logic [NUM_MASTERS-1:0] w_grant [NUM_TOTAL_SLAVES-1:0];
+    logic [NUM_TOTAL_SLAVES-1:0] b_grant [NUM_MASTERS-1:0];
+    logic [NUM_MASTERS-1:0] ar_grant [NUM_TOTAL_SLAVES-1:0];
+    logic [NUM_TOTAL_SLAVES-1:0] r_grant [NUM_MASTERS-1:0];
 
     // Forward path
     generate
-        for (s_idx = 0; s_idx < NUM_SLAVES; s_idx++) begin
+        for (s_idx = 0; s_idx < NUM_TOTAL_SLAVES; s_idx++) begin
             /* 
             We need to tranpose from the master's selected slaves to the slave's requests from the masters. 
             Slave_select: for each master, which slave is being selected?
@@ -360,7 +305,7 @@ module axi_crossbar #(
             // AW Channel
             axi_arbiter #(
                 .NUM_DEVICES(NUM_MASTERS)
-            ) aw_arb (
+            ) u_aw_arb_slave (
                 .tf_finished(aw_s_tf_finished[s_idx]),
                 .request(aw_master_req[s_idx]),
                 .grant(aw_grant[s_idx]), .*
@@ -369,7 +314,7 @@ module axi_crossbar #(
             // AR Channel
             axi_arbiter #(
                 .NUM_DEVICES(NUM_MASTERS)
-            ) ar_arb (
+            ) u_ar_arb_slave (
                 .tf_finished(ar_s_tf_finished[s_idx]),
                 .request(ar_master_req[s_idx]),
                 .grant(ar_grant[s_idx]), .*
@@ -381,7 +326,7 @@ module axi_crossbar #(
     generate
         for (m_idx = 0; m_idx < NUM_MASTERS; m_idx++) begin
             // tranpose (this time in reverse)
-            for (s_idx = 0; s_idx < NUM_SLAVES; s_idx++) begin
+            for (s_idx = 0; s_idx < NUM_TOTAL_SLAVES; s_idx++) begin
                 assign b_slave_select[m_idx][s_idx] = b_master_req[s_idx][m_idx];
                 assign r_slave_select[m_idx][s_idx] = r_master_req[s_idx][m_idx];
                 
@@ -391,8 +336,8 @@ module axi_crossbar #(
 
             // B Channel
             axi_arbiter #(
-                .NUM_DEVICES(NUM_SLAVES)
-            ) b_arb (
+                .NUM_DEVICES(NUM_TOTAL_SLAVES)
+            ) u_b_arb_master (
                 .tf_finished(b_m_tf_finished[m_idx]),
                 .request(b_slave_req[m_idx]),
                 .grant(b_grant[m_idx]), .*
@@ -400,8 +345,8 @@ module axi_crossbar #(
 
             // R Channel
             axi_arbiter #(
-                .NUM_DEVICES(NUM_SLAVES)
-            ) r_arb (
+                .NUM_DEVICES(NUM_TOTAL_SLAVES)
+            ) u_r_arb_master (
                 .tf_finished(r_m_tf_finished[m_idx]),
                 .request(r_slave_req[m_idx]),
                 .grant(r_grant[m_idx]), .*
@@ -411,10 +356,10 @@ module axi_crossbar #(
 
     // Transfer (tf): one channel operation
     // Transaction (tx): entire multi-channel operation
-    logic [NUM_SLAVES-1:0] r_s_last_skid;
+    logic [NUM_TOTAL_SLAVES-1:0] r_s_last_skid;
 
     always_comb begin : trans_start_end_logic
-        for (int slave = 0; slave < NUM_SLAVES; slave++) begin
+        for (int slave = 0; slave < NUM_TOTAL_SLAVES; slave++) begin
             w_s_last_mux[slave] = w_s_payload_mux[slave][0];
             r_s_last_skid[slave] = r_s_payload_skid[slave][0];
         end
@@ -437,19 +382,19 @@ module axi_crossbar #(
     end
 
     // ========== MUXES ========== //
-    logic [NUM_MASTERS-1:0] aw_ready_mux [NUM_SLAVES-1:0];
-    logic [NUM_MASTERS-1:0] w_ready_mux [NUM_SLAVES-1:0];
-    logic [NUM_SLAVES-1:0] b_ready_mux [NUM_MASTERS-1:0];
-    logic [NUM_MASTERS-1:0] ar_ready_mux [NUM_SLAVES-1:0];
-    logic [NUM_SLAVES-1:0] r_ready_mux [NUM_MASTERS-1:0];
+    logic [NUM_MASTERS-1:0] aw_ready_mux [NUM_TOTAL_SLAVES-1:0];
+    logic [NUM_MASTERS-1:0] w_ready_mux [NUM_TOTAL_SLAVES-1:0];
+    logic [NUM_TOTAL_SLAVES-1:0] b_ready_mux [NUM_MASTERS-1:0];
+    logic [NUM_MASTERS-1:0] ar_ready_mux [NUM_TOTAL_SLAVES-1:0];
+    logic [NUM_TOTAL_SLAVES-1:0] r_ready_mux [NUM_MASTERS-1:0];
 
     generate
-        for (s_idx = 0; s_idx < NUM_SLAVES; s_idx++) begin
+        for (s_idx = 0; s_idx < NUM_TOTAL_SLAVES; s_idx++) begin
             // AW Channel
             axi_mux #(
                 .PAYLOAD_WIDTH(PAYLOAD_WIDTH_AW),
                 .NUM_DEVICES(NUM_MASTERS)
-            ) aw_mux (
+            ) u_aw_mux (
                 .src_valid(aw_m_valid_skid),
                 .dst_valid(aw_s_valid_mux[s_idx]),
                 .dst_ready(aw_s_ready_mux[s_idx]),
@@ -463,7 +408,7 @@ module axi_crossbar #(
             axi_mux #(
                 .PAYLOAD_WIDTH(PAYLOAD_WIDTH_W),
                 .NUM_DEVICES(NUM_MASTERS)
-            ) w_mux (
+            ) u_w_mux (
                 .src_valid(w_m_valid_skid),
                 .dst_valid(w_s_valid_mux[s_idx]),
                 .dst_ready(w_s_ready_mux[s_idx]),
@@ -477,7 +422,7 @@ module axi_crossbar #(
             axi_mux #(
                 .PAYLOAD_WIDTH(PAYLOAD_WIDTH_AR),
                 .NUM_DEVICES(NUM_MASTERS)
-            ) ar_mux (
+            ) u_ar_mux (
                 .src_valid(ar_m_valid_skid),
                 .dst_valid(ar_s_valid_mux[s_idx]),
                 .dst_ready(ar_s_ready_mux[s_idx]),
@@ -494,13 +439,13 @@ module axi_crossbar #(
             // B Channel
             axi_mux #(
                 .PAYLOAD_WIDTH(PAYLOAD_WIDTH_B),
-                .NUM_DEVICES(NUM_SLAVES)
-            ) b_mux (
+                .NUM_DEVICES(NUM_TOTAL_SLAVES)
+            ) u_b_mux (
                 .src_valid(b_s_valid_skid),
                 .dst_valid(b_m_valid_mux[m_idx]),
                 .dst_ready(b_m_ready_mux[m_idx]),
                 .src_ready(b_ready_mux[m_idx]),
-                .grant(b_grant[m_idx] & b_slave_req[m_idx]), // fix for two cycle request signals on single transactions
+                .grant(b_grant[m_idx] & b_slave_req[m_idx]),
                 .src_payload(b_s_payload_skid),
                 .dst_payload(b_m_payload_mux[m_idx])
             );
@@ -508,13 +453,13 @@ module axi_crossbar #(
             // R Channel
             axi_mux #(
                 .PAYLOAD_WIDTH(PAYLOAD_WIDTH_R),
-                .NUM_DEVICES(NUM_SLAVES)
-            ) r_mux (
+                .NUM_DEVICES(NUM_TOTAL_SLAVES)
+            ) u_r_mux (
                 .src_valid(r_s_valid_skid),
                 .dst_valid(r_m_valid_mux[m_idx]),
                 .dst_ready(r_m_ready_mux[m_idx]),
                 .src_ready(r_ready_mux[m_idx]),
-                .grant(r_grant[m_idx] & r_slave_req[m_idx]), // fix for two cycle request signals on single transactions
+                .grant(r_grant[m_idx] & r_slave_req[m_idx]),
                 .src_payload(r_s_payload_skid),
                 .dst_payload(r_m_payload_mux[m_idx])
             );
@@ -527,7 +472,7 @@ module axi_crossbar #(
         w_m_ready_skid  = 0;
         ar_m_ready_skid = 0;
         
-        for (int i = 0; i < NUM_SLAVES; i++) begin
+        for (int i = 0; i < NUM_TOTAL_SLAVES; i++) begin
             aw_m_ready_skid |= aw_ready_mux[i];
             w_m_ready_skid |= w_ready_mux[i];
             ar_m_ready_skid |= ar_ready_mux[i];
@@ -544,12 +489,12 @@ module axi_crossbar #(
 
     // ========== GRANT TRACKERS ========== //
     generate
-        for (s_idx = 0; s_idx < NUM_SLAVES; s_idx++) begin
+        for (s_idx = 0; s_idx < NUM_TOTAL_SLAVES; s_idx++) begin
             // W Channel
             axi_grant_tracker #(
                 .FIFO_DEPTH(MAX_OUTSTANDING_TX),
                 .NUM_MASTERS(NUM_MASTERS)
-            ) w_gt (
+            ) u_w_gt (
                 .new_tx(aw_tx_started[s_idx]), 
                 .tf_finished(w_s_tf_finished[s_idx]),
                 .i_grant(aw_grant[s_idx]), 
@@ -561,7 +506,7 @@ module axi_crossbar #(
             axi_grant_tracker #(
                 .FIFO_DEPTH(MAX_OUTSTANDING_TX),
                 .NUM_MASTERS(NUM_MASTERS)
-            ) b_gt (
+            ) u_b_gt (
                 .new_tx(aw_tx_started[s_idx]), 
                 .tf_finished(b_s_tf_finished[s_idx]),
                 .i_grant(aw_grant[s_idx]), 
@@ -573,7 +518,7 @@ module axi_crossbar #(
             axi_grant_tracker #(
                 .FIFO_DEPTH(MAX_OUTSTANDING_TX),
                 .NUM_MASTERS(NUM_MASTERS)
-            ) r_gt (
+            ) u_r_gt (
                 .new_tx(ar_tx_started[s_idx]), 
                 .tf_finished(r_s_tf_finished[s_idx]),
                 .i_grant(ar_grant[s_idx]), 
@@ -583,58 +528,63 @@ module axi_crossbar #(
         end
     endgenerate
 
-    // ========== DECERR HANDLER ========== //
-    always_comb begin
-        for (int i = 0; i < NUM_MASTERS; i++) begin
-            aw_m_id_skid[i] = aw_m_payload_skid[i][14+:ID_WIDTH];
-            ar_m_id_skid[i] = ar_m_payload_skid[i][14+:ID_WIDTH];
-        end
-    end
+    // ========== DECERR HANDLERS ========== //
+    logic [ID_WIDTH-1:0] decerr_b_id;
+    logic [RESP_WIDTH-1:0] decerr_b_resp;
+    logic [ID_WIDTH-1:0] decerr_r_id;
+    logic [RESP_WIDTH-1:0] decerr_r_resp;
+    logic decerr_r_last;
+
+    assign b_s_payload_skid[DECERR_SLAVE] = {decerr_b_id, decerr_b_resp};
+    assign b_s_id_skid[DECERR_SLAVE] = decerr_b_id;
+
+    assign r_s_payload_skid[DECERR_SLAVE] = {decerr_r_id, {DATA_WIDTH{1'b0}}, decerr_r_resp, decerr_r_last};
+    assign r_s_id_skid[DECERR_SLAVE] = decerr_r_id;
 
     /* verilator lint_off PINCONNECTEMPTY */
-    generate
-        for (m_idx = 0; m_idx < NUM_MASTERS; m_idx++) begin
-            axi_decerr_handler #(
-                .ID_WIDTH(ID_WIDTH),
-                .LEN_WIDTH(LEN_WIDTH)
-            ) dh_aw (
-                .write(1),
-                .decerr(aw_decerr[m_idx]), 
-                .response_ready(b_m_ready_mux[m_idx]),
-                .write_valid(w_m_valid_skid[m_idx]),
-                .write_last(w_m_payload_skid[m_idx][0]),
-                .address_id(aw_m_id_skid[m_idx]),
-                .read_len(0),
-                .response_valid(decerr_b_valid[m_idx]),
-                .response_id(decerr_b_id[m_idx]),
-                .response_resp(decerr_b_resp[m_idx]), 
-                .response_last(),
-                .address_ready(decerr_aw_ready[m_idx]),
-                .write_ready(decerr_w_ready[m_idx]), 
-                .decerr_grant(decerr_aw_grant[m_idx]), .*
-            );
-            
-            axi_decerr_handler #( 
-                .ID_WIDTH(ID_WIDTH),
-                .LEN_WIDTH(LEN_WIDTH)
-            ) dh_ar (
-                .write(0),
-                .decerr(ar_decerr[m_idx]), 
-                .response_ready(r_m_ready_mux[m_idx]),
-                .write_valid(),
-                .write_last(),
-                .address_id(ar_m_id_skid[m_idx]),
-                .read_len(ar_m_payload_skid[m_idx][6+:LEN_WIDTH]),
-                .response_valid(decerr_r_valid[m_idx]), 
-                .response_id(decerr_r_id[m_idx]),
-                .response_resp(decerr_r_resp[m_idx]), 
-                .response_last(decerr_r_last[m_idx]),
-                .address_ready(decerr_ar_ready[m_idx]),
-                .write_ready(), 
-                .decerr_grant(decerr_ar_grant[m_idx]), .*
-            );
-        end
-    endgenerate
+    axi_decerr_handler #(
+        .ID_WIDTH(ID_WIDTH),
+        .LEN_WIDTH(LEN_WIDTH)
+    ) u_dh_aw (
+        .clk(clk),
+        .n_rst(n_rst),
+        .write(1'b1),
+        .decerr(aw_s_valid_mux[DECERR_SLAVE]), 
+        .address_id(aw_s_payload_mux[DECERR_SLAVE][14+:ID_WIDTH]),
+        .read_len('0),
+        .write_valid(w_s_valid_mux[DECERR_SLAVE]),
+        .write_last(w_s_last_mux[DECERR_SLAVE]),
+        .response_ready(b_s_ready_skid[DECERR_SLAVE]),
+        .address_ready(aw_s_ready_mux[DECERR_SLAVE]),
+        .write_ready(w_s_ready_mux[DECERR_SLAVE]), 
+        .response_valid(b_s_valid_skid[DECERR_SLAVE]),
+        .response_id(decerr_b_id),
+        .response_resp(decerr_b_resp), 
+        .response_last(),
+        .decerr_grant()
+    );
+
+    axi_decerr_handler #( 
+        .ID_WIDTH(ID_WIDTH),
+        .LEN_WIDTH(LEN_WIDTH)
+    ) u_dh_ar (
+        .clk(clk),
+        .n_rst(n_rst),
+        .write(1'b0),
+        .decerr(ar_s_valid_mux[DECERR_SLAVE]), 
+        .address_id(ar_s_payload_mux[DECERR_SLAVE][14+:ID_WIDTH]),
+        .read_len(ar_s_payload_mux[DECERR_SLAVE][6+:LEN_WIDTH]),
+        .write_valid(1'b0),
+        .write_last(1'b0),
+        .response_ready(r_s_ready_skid[DECERR_SLAVE]),
+        .address_ready(ar_s_ready_mux[DECERR_SLAVE]),
+        .write_ready(),
+        .response_valid(r_s_valid_skid[DECERR_SLAVE]), 
+        .response_id(decerr_r_id),
+        .response_resp(decerr_r_resp), 
+        .response_last(decerr_r_last),
+        .decerr_grant()
+    );
     /* verilator lint_on PINCONNECTEMPTY */
 
 endmodule

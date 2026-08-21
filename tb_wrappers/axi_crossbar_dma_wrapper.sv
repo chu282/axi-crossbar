@@ -9,10 +9,10 @@ module axi_crossbar_dma_wrapper #(
     parameter FIFO_DEPTH = 16,
     parameter MAX_OUTSTANDING_TX = 8,
 
-    // Slave 0 (SRAM): 0x0000_0000 -> 0x7FFF_FFFF (Base: 0x0000_0000, Mask: 0x8000_0000)
-    // Slave 1 (DMA CSR): 0x8000_0000 -> 0x8000_0FFF (Base: 0x8000_0000, Mask: 0x7FFF_F000)
+    // Slave 0 (SRAM):    0x0000_0000 -> 0x0000_0FFF (4KB)
+    // Slave 1 (DMA CSR): 0x8000_0000 -> 0x8000_0FFF (4KB)
     parameter [ADDR_WIDTH-1:0] SLAVE_BASE_ADDR [NUM_SLAVES-1:0] = '{32'h8000_0000, 32'h0000_0000},
-    parameter [ADDR_WIDTH-1:0] SLAVE_ADDR_MASK [NUM_SLAVES-1:0] = '{32'hFFFF_F000, 32'h8000_0000}
+    parameter [ADDR_WIDTH-1:0] SLAVE_ADDR_MASK [NUM_SLAVES-1:0] = '{32'hFFFF_F000, 32'hFFFF_F000}
 ) (
     input  logic clk, n_rst,
 

@@ -13,8 +13,8 @@ module axi_decerr_handler #(
 
     localparam DECERR = 2'b11;
 
-    logic [ID_WIDTH-1:0] captured_id;
-    logic [LEN_WIDTH-1:0] captured_len;
+    logic [ID_WIDTH-1:0] reg_id;
+    logic [LEN_WIDTH-1:0] reg_len;
     logic [LEN_WIDTH-1:0] sent_responses;
 
     typedef enum logic [1:0] {
@@ -34,13 +34,13 @@ module axi_decerr_handler #(
 
     always_ff @(posedge clk, negedge n_rst) begin : capture_ff
         if(~n_rst) begin
-            captured_id <= 0;
-            captured_len <= 0;
+            reg_id <= 0;
+            reg_len <= 0;
             sent_responses <= 0;
         end
-        else if (state == IDLE && next_state == SEND_ADDR_READY) begin
-            captured_id <= address_id;
-            captured_len <= read_len;
+        else if (state == SEND_ADDR_READY && decerr) begin
+            reg_id <= address_id;
+            reg_len <= read_len;
             sent_responses <= 0;
         end
         else if (state == SEND_RESP && response_ready) begin
@@ -54,7 +54,7 @@ module axi_decerr_handler #(
             IDLE: begin
                 next_state = decerr ? SEND_ADDR_READY : IDLE;
             end
-            SEND_ADDR_READY: begin // dont need to wait, address already valid
+            SEND_ADDR_READY: begin // send ready to complete handshake
                 if (write) 
                     next_state = SEND_W_READY;
                 else 
@@ -65,7 +65,7 @@ module axi_decerr_handler #(
                     next_state = SEND_RESP;
             end
             SEND_RESP: begin // send read_len responses
-                if (response_ready && (sent_responses == captured_len)) 
+                if (response_ready && (sent_responses == reg_len)) 
                     next_state = IDLE;
             end
             default: next_state = IDLE;
@@ -106,9 +106,9 @@ module axi_decerr_handler #(
                 write_ready = 0;
                 response_valid = 1;
                 response_resp = DECERR;
-                response_id = captured_id;
+                response_id = reg_id;
                 decerr_grant = 1;
-                response_last = (sent_responses == captured_len) ? 1 : 0;
+                response_last = sent_responses == reg_len;
             end
             default: begin
                 address_ready = 0;

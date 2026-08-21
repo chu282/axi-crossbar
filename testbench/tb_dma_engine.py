@@ -37,7 +37,7 @@ def stall_generator(probability=0.2):
     while True:
         yield random.random() < probability
 
-async def test_transfer(dut, s, length, from_addr, to_addr, data, exp_err=0, debug=1):
+async def test_transfer(dut, s, length, from_addr, to_addr, data, exp_err=0, debug=0):
     s.write(from_addr, data)
 
     # write guard data
@@ -152,13 +152,14 @@ async def test_dma_engine(dut):
     test.value = 3
     NUM_TESTS = 2000
 
-    s.write_if.aw_channel.set_pause_generator(stall_generator(0.2))
-    s.write_if.w_channel.set_pause_generator(stall_generator(0.2))
-    s.write_if.b_channel.set_pause_generator(stall_generator(0.2))
-    s.read_if.ar_channel.set_pause_generator(stall_generator(0.2))
-    s.read_if.r_channel.set_pause_generator(stall_generator(0.2))
-
     for _ in range(NUM_TESTS):
+        prob = random.uniform(0, 0.8)
+        s.write_if.aw_channel.set_pause_generator(stall_generator(prob))
+        s.write_if.w_channel.set_pause_generator(stall_generator(prob))
+        s.write_if.b_channel.set_pause_generator(stall_generator(prob))
+        s.read_if.ar_channel.set_pause_generator(stall_generator(prob))
+        s.read_if.r_channel.set_pause_generator(stall_generator(prob))
+
         from_addr = random.randint(0, 4096)
         to_addr = random.randint(0, 4096)
         length = random.randint(0, 4096)
