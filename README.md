@@ -1,6 +1,6 @@
 # NxM AXI4-Crossbar
 ## Introduction
-This project implements an in-order NxM AXI4-Crossbar system paired with a DMA engine and simple 32x1024 SRAM block in SystemVerilog using **FuseSoC for package management, Verilator for linting/simulation, cocotb and cocotbext-axi for verification, Surfer for waveform viewing, and Synopsys Design Compiler for synthesis**.
+This project implements an in-order NxM AXI4-Crossbar system paired with a DMA engine and simple 32x1024 SRAM block in SystemVerilog using **Verilator for linting/simulation, cocotb and cocotbext-axi for verification, and Surfer for waveform viewing**.
 
 ## Features
 
@@ -46,9 +46,8 @@ make axi_mux_sim
 You can view the diagram on drawio [here](https://drive.google.com/file/d/1dBV1LzKK90WF5i-RrpE6lwYEfy03LkbD/view?usp=sharing).
 
 ## Directory Structure
-* `source/` — Core Verilog modules.
-* `testbench/` — Simulation testbenches.
-* `tb_wrappers/` — Wrapper modules for testbenches.
-* `scripts/` — TCL scripts for synthesis.
-* `cores/` — FuseSoC core files.
-* `waves/` — Waveforms and their config files.
+* `source/` — Core SystemVerilog RTL modules.
+* `testbench/` — cocotb Python simulation testbenches.
+* `tb_wrappers/` — Verilog wrapper modules for testbenches.
+* `scripts/` — Helper scripts for test reporting and waveform styling.
+* `waves/` — Waveforms and Surfer configuration files.

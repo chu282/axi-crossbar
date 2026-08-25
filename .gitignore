@@ -1,0 +1,29 @@
+﻿# Build and simulation artifacts
+sim_builds/
+testbench/sim_build/
+dump.fst
+*.tmp
+
+# Waveform dumps (kept local)
+waves/fst/
+waves/vcd/
+*.fst
+*.vcd
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Logs and test outputs
+*.log
+results.xml
+
+# IDE and local server configurations
+.vscode/
+
+# EDA synthesis scripts, vendor cores, and command scripts (kept local)
+cores/
+scripts/*.tcl
+*.core
+*.do
